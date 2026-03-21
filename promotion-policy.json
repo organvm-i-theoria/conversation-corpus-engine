@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "mode": "review-governed",
+  "thresholds": {
+    "max_fail_corpora": 0.0,
+    "max_warn_corpora": 0.0,
+    "max_stale_corpora": 0.0,
+    "max_missing_contract_corpora": 0.0,
+    "min_manual_pass_rate": 1.0,
+    "min_registered_active_corpora": 1.0
+  }
+}

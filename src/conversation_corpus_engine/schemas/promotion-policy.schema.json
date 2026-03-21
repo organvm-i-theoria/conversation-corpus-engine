@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Promotion Policy",
+  "type": "object",
+  "required": [
+    "version",
+    "mode",
+    "thresholds"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": ["string", "null"]
+    },
+    "thresholds": {
+      "type": "object",
+      "required": [
+        "max_fail_corpora",
+        "max_warn_corpora",
+        "max_stale_corpora",
+        "max_missing_contract_corpora",
+        "min_manual_pass_rate",
+        "min_registered_active_corpora"
+      ],
+      "properties": {
+        "max_fail_corpora": {
+          "type": "number"
+        },
+        "max_warn_corpora": {
+          "type": "number"
+        },
+        "max_stale_corpora": {
+          "type": "number"
+        },
+        "max_missing_contract_corpora": {
+          "type": "number"
+        },
+        "min_manual_pass_rate": {
+          "type": "number"
+        },
+        "min_registered_active_corpora": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

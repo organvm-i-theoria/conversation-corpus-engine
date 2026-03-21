@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation Corpus Contract",
+  "type": "object",
+  "required": [
+    "contract_name",
+    "contract_version",
+    "adapter_type",
+    "corpus_id",
+    "name",
+    "generated_at"
+  ],
+  "properties": {
+    "contract_name": {
+      "const": "conversation-corpus-engine-v1"
+    },
+    "contract_version": {
+      "type": "integer"
+    },
+    "adapter_type": {
+      "type": "string"
+    },
+    "corpus_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "required_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "counts": {
+      "type": "object"
+    },
+    "source_input": {
+      "type": ["string", "null"]
+    },
+    "collection_scope": {
+      "type": ["string", "null"]
+    },
+    "source_snapshot_path": {
+      "type": ["string", "null"]
+    },
+    "source_signature_fingerprint": {
+      "type": ["string", "null"]
+    },
+    "source_content_fingerprint": {
+      "type": ["string", "null"]
+    },
+    "source_file_count": {
+      "type": ["integer", "null"]
+    },
+    "source_total_bytes": {
+      "type": ["integer", "null"]
+    },
+    "source_latest_mtime_ns": {
+      "type": ["integer", "null"]
+    },
+    "source_format_counts": {
+      "type": "object"
+    },
+    "source_archive_type": {
+      "type": ["string", "null"]
+    }
+  }
+}

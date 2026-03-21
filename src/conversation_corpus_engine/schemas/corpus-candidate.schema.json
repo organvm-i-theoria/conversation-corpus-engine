@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Corpus Candidate Manifest",
+  "type": "object",
+  "required": [
+    "candidate_id",
+    "generated_at",
+    "status",
+    "project_root",
+    "live_corpus_id",
+    "live_root",
+    "candidate_root",
+    "recommendation_state",
+    "diff_summary",
+    "diff_evaluation"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "provider": {
+      "type": ["string", "null"]
+    },
+    "live_corpus_id": {
+      "type": "string"
+    },
+    "live_name": {
+      "type": ["string", "null"]
+    },
+    "live_root": {
+      "type": "string"
+    },
+    "candidate_root": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "recommendation_state": {
+      "type": "string"
+    },
+    "diff_summary": {
+      "type": "object",
+      "required": [
+        "query_count",
+        "changed_query_count",
+        "structural_change_count"
+      ],
+      "properties": {
+        "query_count": {
+          "type": "integer"
+        },
+        "changed_query_count": {
+          "type": "integer"
+        },
+        "structural_change_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "diff_evaluation": {
+      "type": "object",
+      "required": [
+        "overall_state"
+      ],
+      "properties": {
+        "overall_state": {
+          "type": "string"
+        },
+        "fail_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "review_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "review": {
+      "type": ["object", "null"],
+      "properties": {
+        "recorded_at": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "promotion": {
+      "type": ["object", "null"],
+      "properties": {
+        "promoted_at": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "promoted_root": {
+          "type": "string"
+        }
+      }
+    },
+    "rollback": {
+      "type": ["object", "null"],
+      "properties": {
+        "recorded_at": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "restored_root": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

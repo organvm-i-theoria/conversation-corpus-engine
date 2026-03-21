@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation Corpus Engine MCP Context",
+  "type": "object",
+  "required": [
+    "contract_name",
+    "contract_version",
+    "generated_at",
+    "project_root",
+    "source_drop_root",
+    "summary",
+    "registry",
+    "providers",
+    "governance",
+    "latest_events",
+    "review_queue",
+    "schema_catalog"
+  ],
+  "properties": {
+    "contract_name": {
+      "const": "conversation-corpus-engine-mcp-context-v1"
+    },
+    "contract_version": {
+      "type": "integer"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "source_drop_root": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "registered_corpus_count",
+        "active_corpus_count",
+        "provider_count",
+        "healthy_provider_count",
+        "refresh_recommended_count",
+        "open_review_count"
+      ],
+      "properties": {
+        "registered_corpus_count": {
+          "type": "integer"
+        },
+        "active_corpus_count": {
+          "type": "integer"
+        },
+        "provider_count": {
+          "type": "integer"
+        },
+        "healthy_provider_count": {
+          "type": "integer"
+        },
+        "refresh_recommended_count": {
+          "type": "integer"
+        },
+        "open_review_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "required": [
+        "default_corpus_id",
+        "corpora"
+      ],
+      "properties": {
+        "default_corpus_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "corpora": {
+          "type": "array"
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "provider",
+          "display_name",
+          "overall_state",
+          "next_command",
+          "selected_target",
+          "targets"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "overall_state": {
+            "type": "string"
+          },
+          "next_command": {
+            "type": "string"
+          },
+          "selected_target": {
+            "type": "object",
+            "required": [
+              "corpus_id",
+              "root"
+            ],
+            "properties": {
+              "corpus_id": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              }
+            }
+          },
+          "targets": {
+            "type": "array"
+          },
+          "policy": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "discovery": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "promotion_policy",
+        "latest_policy_replay",
+        "latest_policy_candidate",
+        "latest_policy_application",
+        "latest_corpus_candidate",
+        "latest_corpus_promotion"
+      ],
+      "properties": {
+        "promotion_policy": {
+          "type": "object"
+        },
+        "latest_policy_replay": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_policy_candidate": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_policy_application": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_corpus_candidate": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_corpus_promotion": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "latest_events": {
+      "type": "object",
+      "required": [
+        "latest_corpus_live_pointer",
+        "latest_policy_live_pointer",
+        "latest_provider_refreshes"
+      ],
+      "properties": {
+        "latest_corpus_live_pointer": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_policy_live_pointer": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "latest_provider_refreshes": {
+          "type": "object"
+        }
+      }
+    },
+    "review_queue": {
+      "type": "object",
+      "required": [
+        "open_count",
+        "items"
+      ],
+      "properties": {
+        "open_count": {
+          "type": "integer"
+        },
+        "items": {
+          "type": "array"
+        }
+      }
+    },
+    "schema_catalog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

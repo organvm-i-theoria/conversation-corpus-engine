@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provider Refresh Payload",
+  "type": "object",
+  "required": [
+    "run_id",
+    "generated_at",
+    "project_root",
+    "provider",
+    "provider_name",
+    "mode",
+    "live_corpus_id",
+    "live_root",
+    "candidate_root",
+    "source_path",
+    "import_result",
+    "evaluation",
+    "candidate"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "provider_name": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "mode_resolution": {
+      "type": "string"
+    },
+    "live_corpus_id": {
+      "type": "string"
+    },
+    "live_root": {
+      "type": "string"
+    },
+    "candidate_root": {
+      "type": "string"
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "import_result": {
+      "type": "object",
+      "required": [
+        "provider",
+        "mode",
+        "source_path",
+        "output_root",
+        "corpus_id",
+        "name"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "output_root": {
+          "type": "string"
+        },
+        "corpus_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "required": [
+        "ran",
+        "outputs"
+      ],
+      "properties": {
+        "ran": {
+          "type": "boolean"
+        },
+        "outputs": {
+          "type": "object"
+        },
+        "scorecard": {
+          "type": ["object", "null"]
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "status",
+        "candidate_root"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "candidate_root": {
+          "type": "string"
+        }
+      }
+    },
+    "review": {
+      "type": ["object", "null"]
+    },
+    "promotion": {
+      "type": ["object", "null"]
+    },
+    "refresh_json_path": {
+      "type": "string"
+    },
+    "refresh_markdown_path": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.DS_Store
+
+/federation/
+/reports/
+/state/
+/source-drop/

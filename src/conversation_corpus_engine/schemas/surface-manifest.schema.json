@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation Corpus Engine Surface Manifest",
+  "type": "object",
+  "required": [
+    "contract_name",
+    "contract_version",
+    "generated_at",
+    "engine",
+    "project",
+    "schemas",
+    "cli_surfaces",
+    "registry",
+    "providers",
+    "artifacts"
+  ],
+  "properties": {
+    "contract_name": {
+      "const": "conversation-corpus-engine-surface-manifest-v1"
+    },
+    "contract_version": {
+      "type": "integer"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "engine": {
+      "type": "object",
+      "required": [
+        "package",
+        "version",
+        "repo_root"
+      ],
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "repo_root": {
+          "type": "string"
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "project_root",
+        "source_drop_root",
+        "organ",
+        "system_role"
+      ],
+      "properties": {
+        "project_root": {
+          "type": "string"
+        },
+        "source_drop_root": {
+          "type": "string"
+        },
+        "organ": {
+          "type": "string"
+        },
+        "system_role": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cli_surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "command",
+          "purpose",
+          "audience"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "audience": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "required": [
+        "registry_version",
+        "corpus_count",
+        "active_corpus_count",
+        "default_corpus_id",
+        "corpora"
+      ],
+      "properties": {
+        "registry_version": {
+          "type": "integer"
+        },
+        "corpus_count": {
+          "type": "integer"
+        },
+        "active_corpus_count": {
+          "type": "integer"
+        },
+        "default_corpus_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "corpora": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "corpus_id",
+              "name",
+              "root",
+              "status",
+              "default",
+              "valid_contract"
+            ],
+            "properties": {
+              "corpus_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "default": {
+                "type": "boolean"
+              },
+              "valid_contract": {
+                "type": "boolean"
+              },
+              "evaluation_overall_state": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_freshness_state": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "provider",
+          "display_name",
+          "adapter_type",
+          "discovery_mode",
+          "calibration_only",
+          "selected_targets",
+          "source_policy",
+          "readiness_status",
+          "next_command"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "adapter_type": {
+            "type": "string"
+          },
+          "discovery_mode": {
+            "type": "string"
+          },
+          "calibration_only": {
+            "type": "boolean"
+          },
+          "selected_targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "role",
+                "corpus_id",
+                "root",
+                "selected"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string"
+                },
+                "corpus_id": {
+                  "type": "string"
+                },
+                "root": {
+                  "type": "string"
+                },
+                "selected": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "source_policy": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "readiness_status": {
+            "type": "string"
+          },
+          "next_command": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "registry_path",
+        "promotion_policy_path",
+        "federation_summary_path",
+        "policy_replay_latest_json_path",
+        "policy_candidate_latest_json_path",
+        "policy_application_latest_json_path",
+        "corpus_candidate_latest_json_path",
+        "corpus_promotion_latest_json_path",
+        "corpus_live_pointer_path",
+        "source_policy_paths",
+        "provider_refresh_latest_json_paths"
+      ],
+      "properties": {
+        "registry_path": {
+          "type": "string"
+        },
+        "promotion_policy_path": {
+          "type": "string"
+        },
+        "federation_summary_path": {
+          "type": "string"
+        },
+        "policy_replay_latest_json_path": {
+          "type": "string"
+        },
+        "policy_candidate_latest_json_path": {
+          "type": "string"
+        },
+        "policy_application_latest_json_path": {
+          "type": "string"
+        },
+        "corpus_candidate_latest_json_path": {
+          "type": "string"
+        },
+        "corpus_promotion_latest_json_path": {
+          "type": "string"
+        },
+        "corpus_live_pointer_path": {
+          "type": "string"
+        },
+        "source_policy_paths": {
+          "type": "object"
+        },
+        "provider_refresh_latest_json_paths": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

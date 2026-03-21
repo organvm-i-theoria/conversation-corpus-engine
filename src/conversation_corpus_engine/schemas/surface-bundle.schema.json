@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation Corpus Engine Surface Bundle",
+  "type": "object",
+  "required": [
+    "contract_name",
+    "contract_version",
+    "generated_at",
+    "project_root",
+    "source_drop_root",
+    "summary",
+    "manifest",
+    "context"
+  ],
+  "properties": {
+    "contract_name": {
+      "const": "conversation-corpus-engine-surface-bundle-v1"
+    },
+    "contract_version": {
+      "type": "integer"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "source_drop_root": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "valid",
+        "error_count"
+      ],
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "error_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "schema_name",
+        "path",
+        "markdown_path",
+        "valid",
+        "error_count",
+        "errors"
+      ],
+      "properties": {
+        "schema_name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "markdown_path": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "error_count": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "array"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "schema_name",
+        "path",
+        "markdown_path",
+        "valid",
+        "error_count",
+        "errors"
+      ],
+      "properties": {
+        "schema_name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "markdown_path": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "error_count": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "array"
+        }
+      }
+    },
+    "bundle_validation": {
+      "type": "object",
+      "required": [
+        "schema",
+        "valid",
+        "error_count",
+        "errors"
+      ],
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "error_count": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "array"
+        }
+      }
+    }
+  }
+}

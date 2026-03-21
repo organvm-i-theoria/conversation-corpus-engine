@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provider Source Policy",
+  "type": "object",
+  "required": [
+    "provider",
+    "generated_at",
+    "decision",
+    "primary_root",
+    "primary_corpus_id",
+    "note"
+  ],
+  "properties": {
+    "provider": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string"
+    },
+    "primary_root": {
+      "type": "string"
+    },
+    "primary_corpus_id": {
+      "type": "string"
+    },
+    "fallback_root": {
+      "type": ["string", "null"]
+    },
+    "fallback_corpus_id": {
+      "type": ["string", "null"]
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}
