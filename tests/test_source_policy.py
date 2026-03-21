@@ -38,7 +38,9 @@ class SourcePolicyTests(unittest.TestCase):
                 note="Prefer the curated history corpus for federation.",
             )
             policy = load_source_policy(project_root, "gemini")
-            history = json.loads(source_policy_history_path(project_root).read_text(encoding="utf-8"))
+            history = json.loads(
+                source_policy_history_path(project_root).read_text(encoding="utf-8")
+            )
             targets = provider_corpus_targets(project_root, "gemini", source_drop_root)
 
             self.assertEqual(payload["decision"], "manual-override")

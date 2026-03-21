@@ -24,8 +24,12 @@ class EvaluationTests(unittest.TestCase):
         (root / "state" / "canonical-decisions.json").write_text(
             json.dumps(
                 {
-                    "accepted_duplicates": [{"review_id": "r1", "thread_uids": ["thread-a", "thread-b"]}],
-                    "rejected_contradictions": [{"review_id": "r2", "thread_uids": ["thread-a", "thread-c"]}],
+                    "accepted_duplicates": [
+                        {"review_id": "r1", "thread_uids": ["thread-a", "thread-b"]}
+                    ],
+                    "rejected_contradictions": [
+                        {"review_id": "r2", "thread_uids": ["thread-a", "thread-c"]}
+                    ],
                 },
             ),
             encoding="utf-8",
@@ -69,9 +73,21 @@ class EvaluationTests(unittest.TestCase):
                         "stable_themes": ["alpha", "pipeline"],
                         "doctrine_summary": "Alpha Pipeline governs alpha registry.",
                         "search_text": "Alpha Pipeline alpha registry",
-                        "actions": [{"action_key": "action-alpha", "canonical_action": "Implement alpha registry"}],
-                        "unresolved": [{"question_key": "question-alpha", "canonical_question": "How should alpha evolve?"}],
-                        "key_entities": [{"canonical_label": "Alpha System", "entity_type": "concept"}],
+                        "actions": [
+                            {
+                                "action_key": "action-alpha",
+                                "canonical_action": "Implement alpha registry",
+                            }
+                        ],
+                        "unresolved": [
+                            {
+                                "question_key": "question-alpha",
+                                "canonical_question": "How should alpha evolve?",
+                            }
+                        ],
+                        "key_entities": [
+                            {"canonical_label": "Alpha System", "entity_type": "concept"}
+                        ],
                     },
                 ],
             ),
@@ -272,7 +288,11 @@ class EvaluationTests(unittest.TestCase):
                 "answers": {"source": "seeded"},
             },
             "family_stability": {"exact_member_match_rate": 1.0},
-            "retrieval_metrics": {"family_hit_at_1": 1.0, "thread_hit_at_1": 1.0, "pair_hit_at_3": 1.0},
+            "retrieval_metrics": {
+                "family_hit_at_1": 1.0,
+                "thread_hit_at_1": 1.0,
+                "pair_hit_at_3": 1.0,
+            },
             "answer_metrics": {
                 "state_match_rate": 1.0,
                 "required_citation_coverage_avg": 1.0,

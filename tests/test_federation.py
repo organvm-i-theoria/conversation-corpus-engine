@@ -13,7 +13,9 @@ from conversation_corpus_engine import federation as MODULE
 
 
 def token_map(*tokens: str) -> dict[str, float]:
-    return {token: round(1.0 - (index * 0.05), 4) for index, token in enumerate(tokens)}  # allow-secret
+    return {
+        token: round(1.0 - (index * 0.05), 4) for index, token in enumerate(tokens)  # allow-secret
+    }
 
 
 class MemoryFederationTests(unittest.TestCase):
@@ -115,8 +117,12 @@ class MemoryFederationTests(unittest.TestCase):
                         "doctrine_summary": f"{family_title} doctrine for {query_text}.",
                         "search_text": f"{family_title} doctrine {query_text}",
                         "actions": [{"action_key": action_key, "canonical_action": action_text}],
-                        "unresolved": [{"question_key": question_key, "canonical_question": question_text}],
-                        "key_entities": [{"canonical_label": f"{family_title} Entity", "entity_type": "concept"}],
+                        "unresolved": [
+                            {"question_key": question_key, "canonical_question": question_text}
+                        ],
+                        "key_entities": [
+                            {"canonical_label": f"{family_title} Entity", "entity_type": "concept"}
+                        ],
                         "vector_terms": vector_terms,
                     },
                 ],
@@ -235,19 +241,34 @@ class MemoryFederationTests(unittest.TestCase):
                 question_key="question-beta",
             )
 
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
             result = MODULE.build_federation(project_root)
-            corpora_summary = json.loads((project_root / "federation" / "corpora-summary.json").read_text())
-            families_index = json.loads((project_root / "federation" / "families-index.json").read_text())
-            canonical_families = json.loads((project_root / "federation" / "canonical-families.json").read_text())
+            corpora_summary = json.loads(
+                (project_root / "federation" / "corpora-summary.json").read_text()
+            )
+            families_index = json.loads(
+                (project_root / "federation" / "families-index.json").read_text()
+            )
+            canonical_families = json.loads(
+                (project_root / "federation" / "canonical-families.json").read_text()
+            )
 
             self.assertTrue(Path(result["summary_markdown_path"]).exists())
             self.assertTrue(Path(result["canonical_families_path"]).exists())
             self.assertEqual(len(corpora_summary), 2)
             self.assertTrue(any(item["corpus_id"] == "notes-memory" for item in corpora_summary))
-            self.assertTrue(any(item["federated_family_id"] == "notes-memory:family-beta" for item in families_index))
+            self.assertTrue(
+                any(
+                    item["federated_family_id"] == "notes-memory:family-beta"
+                    for item in families_index
+                )
+            )
             self.assertGreaterEqual(len(canonical_families), 2)
-            self.assertTrue(all(item["source_freshness_state"] == "not_applicable" for item in corpora_summary))
+            self.assertTrue(
+                all(item["source_freshness_state"] == "not_applicable" for item in corpora_summary)
+            )
 
     def test_build_federated_answer_selects_best_matching_corpus(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -271,7 +292,9 @@ class MemoryFederationTests(unittest.TestCase):
                 action_key="action-beta",
                 question_key="question-beta",
             )
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
 
             answer = MODULE.build_federated_answer(project_root, "beta orchard blueprint")
 
@@ -302,7 +325,9 @@ class MemoryFederationTests(unittest.TestCase):
                 action_key="action-beta",
                 question_key="question-beta",
             )
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
             MODULE.build_federation(project_root)
 
             payload = MODULE.search_federation(project_root, "Virtual System Architecture")
@@ -332,12 +357,18 @@ class MemoryFederationTests(unittest.TestCase):
                 question_key="question-shared-b",
             )
 
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
             MODULE.build_federation(project_root)
-            review_queue = json.loads((project_root / "federation" / "review-queue.json").read_text())
+            review_queue = json.loads(
+                (project_root / "federation" / "review-queue.json").read_text()
+            )
 
             self.assertGreaterEqual(review_queue["open_count"], 1)
-            self.assertTrue(any(item["review_type"] == "family-merge" for item in review_queue["items"]))
+            self.assertTrue(
+                any(item["review_type"] == "family-merge" for item in review_queue["items"])
+            )
 
     def test_federated_review_resolution_persists_decision(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -362,10 +393,16 @@ class MemoryFederationTests(unittest.TestCase):
                 question_key="question-shared-b",
             )
 
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
             MODULE.build_federation(project_root)
-            review_queue = json.loads((project_root / "federation" / "review-queue.json").read_text())
-            family_merge = next(item for item in review_queue["items"] if item["review_type"] == "family-merge")
+            review_queue = json.loads(
+                (project_root / "federation" / "review-queue.json").read_text()
+            )
+            family_merge = next(
+                item for item in review_queue["items"] if item["review_type"] == "family-merge"
+            )
 
             FED_CANON.resolve_federated_review_item(
                 project_root,
@@ -377,7 +414,9 @@ class MemoryFederationTests(unittest.TestCase):
             decisions = FED_CANON.load_federated_decisions(project_root)
 
             self.assertTrue(decisions["accepted_family_merges"])
-            self.assertEqual(decisions["accepted_family_merges"][0]["canonical_subject"], "shared-doctrine")
+            self.assertEqual(
+                decisions["accepted_family_merges"][0]["canonical_subject"], "shared-doctrine"
+            )
 
     def test_query_federation_index_filters_by_corpus_and_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -401,7 +440,9 @@ class MemoryFederationTests(unittest.TestCase):
                 action_key="action-beta",
                 question_key="question-beta",
             )
-            MODULE.upsert_corpus(project_root, second_root, corpus_id="notes-memory", name="Notes Memory")
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
             MODULE.build_federation(project_root)
 
             payload = MODULE.query_federation_index(

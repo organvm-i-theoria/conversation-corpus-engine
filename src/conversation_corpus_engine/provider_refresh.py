@@ -126,11 +126,14 @@ def refresh_provider_corpus(
         mode=mode,
     )
     run_id = f"{provider}-{timestamp_slug()}"
-    resolved_candidate_root = (candidate_root or default_refresh_candidate_root(
-        resolved_project_root,
-        provider,
-        run_id,
-    )).resolve()
+    resolved_candidate_root = (
+        candidate_root
+        or default_refresh_candidate_root(
+            resolved_project_root,
+            provider,
+            run_id,
+        )
+    ).resolve()
 
     import_result = import_provider_corpus(
         project_root=resolved_project_root,
@@ -208,7 +211,10 @@ def refresh_provider_corpus(
     write_json(refresh_root / "refresh.json", payload)
     write_markdown(refresh_root / "refresh.md", render_provider_refresh(payload))
     write_json(provider_refresh_latest_json_path(resolved_project_root, provider), payload)
-    write_markdown(provider_refresh_latest_markdown_path(resolved_project_root, provider), render_provider_refresh(payload))
+    write_markdown(
+        provider_refresh_latest_markdown_path(resolved_project_root, provider),
+        render_provider_refresh(payload),
+    )
     append_history(
         provider_refresh_history_path(resolved_project_root),
         {

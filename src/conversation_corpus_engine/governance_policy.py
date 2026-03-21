@@ -60,7 +60,9 @@ def save_promotion_policy(project_root: Path, policy: dict[str, Any]) -> dict[st
     return normalized
 
 
-def policy_with_overrides(project_root: Path, threshold_overrides: dict[str, float] | None = None) -> dict[str, Any]:
+def policy_with_overrides(
+    project_root: Path, threshold_overrides: dict[str, float] | None = None
+) -> dict[str, Any]:
     policy = load_or_create_promotion_policy(project_root)
     if threshold_overrides:
         policy = normalize_promotion_policy(policy)
@@ -85,7 +87,9 @@ def build_policy_calibration(
         learning_state = "blocked"
     payload = {
         "generated_at": now_iso(),
-        "policy": normalize_promotion_policy(policy or load_or_create_promotion_policy(project_root)),
+        "policy": normalize_promotion_policy(
+            policy or load_or_create_promotion_policy(project_root)
+        ),
         "policy_learning": {
             "state": learning_state,
             "reason": overall_state or "unknown",

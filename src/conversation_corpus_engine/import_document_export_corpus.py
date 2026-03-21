@@ -33,7 +33,9 @@ def now_iso() -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Import a document-style provider export into a corpus.")
+    parser = argparse.ArgumentParser(
+        description="Import a document-style provider export into a corpus."
+    )
     parser.add_argument("provider", choices=["gemini", "grok", "perplexity", "copilot"])
     parser.add_argument("input_path", type=Path)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
@@ -44,7 +46,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def display_name(value: str) -> str:
-    return " ".join(part.capitalize() for part in value.replace("-", " ").replace("_", " ").split()).strip() or value
+    return (
+        " ".join(
+            part.capitalize() for part in value.replace("-", " ").replace("_", " ").split()
+        ).strip()
+        or value
+    )
 
 
 def prepare_source_root(
@@ -79,7 +86,17 @@ def strip_html(raw_text: str) -> str:
                 break
             text = text[:start_index] + text[end_index + len(end) :]
             lowered = text.lower()
-    for marker in ("</p>", "</div>", "</section>", "</article>", "<br>", "<br/>", "<br />", "</li>", "</tr>"):
+    for marker in (
+        "</p>",
+        "</div>",
+        "</section>",
+        "</article>",
+        "<br>",
+        "<br/>",
+        "<br />",
+        "</li>",
+        "</tr>",
+    ):
         text = text.replace(marker, f"{marker}\n")
     text = html.unescape(text)
     text = "".join("\n" if char == "\r" else char for char in text)
@@ -159,7 +176,9 @@ def render_markdown_document(source_file: Path) -> tuple[str, str]:
         raw_text = source_file.read_text(encoding="utf-8", errors="ignore")
         if suffix in {".md", ".markdown"}:
             return raw_text, display_name(source_file.stem)
-        return f"# {display_name(source_file.stem)}\n\n{raw_text.strip()}\n", display_name(source_file.stem)
+        return f"# {display_name(source_file.stem)}\n\n{raw_text.strip()}\n", display_name(
+            source_file.stem
+        )
     if suffix in SUPPORTED_HTML_SUFFIXES:
         body = strip_html(source_file.read_text(encoding="utf-8", errors="ignore"))
         return f"# {display_name(source_file.stem)}\n\n{body}\n", display_name(source_file.stem)
@@ -282,9 +301,15 @@ def import_document_export_corpus(
     default_name = name or config["default_corpus_name"]
 
     input_path = input_path.resolve()
-    prepared_root, archive_type, tempdir = prepare_source_root(input_path, provider_slug=provider_slug)
+    prepared_root, archive_type, tempdir = prepare_source_root(
+        input_path, provider_slug=provider_slug
+    )
     try:
-        source_files = [path for path in collect_supported_export_files(prepared_root) if path.suffix.lower() != ".zip"]
+        source_files = [
+            path
+            for path in collect_supported_export_files(prepared_root)
+            if path.suffix.lower() != ".zip"
+        ]
         if not source_files:
             raise FileNotFoundError(
                 f"No supported {provider_name} export files were found under {prepared_root}. "
@@ -300,7 +325,9 @@ def import_document_export_corpus(
                 source_files=source_files,
             )
             if not normalized_manifest:
-                raise FileNotFoundError(f"{provider_name} export under {input_path} did not yield any non-empty text documents.")
+                raise FileNotFoundError(
+                    f"{provider_name} export under {input_path} did not yield any non-empty text documents."
+                )
 
             import_result = import_markdown_document_corpus(
                 staging_root,
@@ -352,7 +379,9 @@ def import_document_export_corpus(
                 "generated_at": now_iso(),
                 "fixture_sources": {"manual": {"source": "unavailable", "count": 0}},
                 "regression_gates": {"overall_state": "warn", "source_reliability_state": "warn"},
-                "notes": [f"Imported {provider_name} export corpus has not been manually evaluated."],
+                "notes": [
+                    f"Imported {provider_name} export corpus has not been manually evaluated."
+                ],
             },
         )
         write_json(
@@ -361,7 +390,9 @@ def import_document_export_corpus(
                 "generated_at": now_iso(),
                 "overall_state": "warn",
                 "source_reliability_state": "warn",
-                "source_notes": [f"Imported {provider_name} export corpus has not been manually evaluated."],
+                "source_notes": [
+                    f"Imported {provider_name} export corpus has not been manually evaluated."
+                ],
                 "gates": [],
             },
         )

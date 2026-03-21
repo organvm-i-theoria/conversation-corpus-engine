@@ -39,7 +39,12 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
                                     "created_at": "2026-03-14T10:00:00Z",
                                     "updated_at": "2026-03-14T10:00:00Z",
                                     "text": "Build the adapter for Claude exports.",
-                                    "content": [{"type": "text", "text": "Build the adapter for Claude exports."}],
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Build the adapter for Claude exports.",
+                                        }
+                                    ],
                                     "attachments": [],
                                     "files": [],
                                 },
@@ -50,8 +55,15 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
                                     "updated_at": "2026-03-14T10:01:00Z",
                                     "text": "I will implement a Claude export adapter and keep it in calibration.",
                                     "content": [
-                                        {"type": "text", "text": "I will implement a Claude export adapter and keep it in calibration."},
-                                        {"type": "tool_use", "name": "artifacts", "input": {"title": "Claude Adapter Plan"}},
+                                        {
+                                            "type": "text",
+                                            "text": "I will implement a Claude export adapter and keep it in calibration.",
+                                        },
+                                        {
+                                            "type": "tool_use",
+                                            "name": "artifacts",
+                                            "input": {"title": "Claude Adapter Plan"},
+                                        },
                                     ],
                                     "attachments": [],
                                     "files": [],
@@ -73,11 +85,15 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
             self.assertEqual(result["corpus_id"], "claude-history-memory")
             self.assertEqual(result["thread_count"], 1)
             self.assertGreaterEqual(result["pair_count"], 1)
-            contract = json.loads((output_root / "corpus" / "contract.json").read_text(encoding="utf-8"))
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(contract["adapter_type"], "claude-export")
             self.assertEqual(contract["counts"]["threads"], 1)
             self.assertTrue((output_root / "corpus" / "source-snapshot.json").exists())
-            threads = json.loads((output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8"))
+            threads = json.loads(
+                (output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(threads[0]["title_normalized"], "Claude Test Thread")
             self.assertIn("claude-export", threads[0]["tags"])
             readme = (output_root / "README.md").read_text(encoding="utf-8")

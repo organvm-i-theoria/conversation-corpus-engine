@@ -107,9 +107,13 @@ def provider_corpus_targets(
 
     primary_corpus_id = policy.get("primary_corpus_id") or config["default_corpus_id"]
     primary_corpus_name = config["default_corpus_name"]
-    primary_root = policy.get("primary_root") or registry_by_id.get(primary_corpus_id, {}).get("root") or conventional_corpus_root(
-        source_drop_root,
-        primary_corpus_id,
+    primary_root = (
+        policy.get("primary_root")
+        or registry_by_id.get(primary_corpus_id, {}).get("root")
+        or conventional_corpus_root(
+            source_drop_root,
+            primary_corpus_id,
+        )
     )
     if primary_root:
         targets.append(
@@ -127,7 +131,9 @@ def provider_corpus_targets(
     fallback_corpus_name = config.get("fallback_corpus_name")
     fallback_root = policy.get("fallback_root")
     if fallback_corpus_id and not fallback_root:
-        fallback_root = registry_by_id.get(fallback_corpus_id, {}).get("root") or conventional_corpus_root(
+        fallback_root = registry_by_id.get(fallback_corpus_id, {}).get(
+            "root"
+        ) or conventional_corpus_root(
             source_drop_root,
             fallback_corpus_id,
         )

@@ -41,9 +41,15 @@ class ImportDocumentExportCorpusTests(unittest.TestCase):
                 name="Perplexity History Memory",
             )
 
-            contract = json.loads((output_root / "corpus" / "contract.json").read_text(encoding="utf-8"))
-            snapshot = json.loads((output_root / "corpus" / "source-snapshot.json").read_text(encoding="utf-8"))
-            manifest = json.loads((output_root / "import-manifest.json").read_text(encoding="utf-8"))
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
+            snapshot = json.loads(
+                (output_root / "corpus" / "source-snapshot.json").read_text(encoding="utf-8")
+            )
+            manifest = json.loads(
+                (output_root / "import-manifest.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(contract["adapter_type"], "perplexity-export")
             self.assertEqual(contract["corpus_id"], "perplexity-history-memory")
@@ -61,8 +67,12 @@ class ImportDocumentExportCorpusTests(unittest.TestCase):
             with zipfile.ZipFile(archive_path, "w") as archive:
                 archive.writestr("export/notes.md", "# Notes\n\nBuild the importer.\n")
 
-            result = import_document_export_corpus(archive_path, output_root, provider_slug="perplexity")
-            contract = json.loads((output_root / "corpus" / "contract.json").read_text(encoding="utf-8"))
+            result = import_document_export_corpus(
+                archive_path, output_root, provider_slug="perplexity"
+            )
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(result["archive_type"], "zip")
             self.assertEqual(contract["source_archive_type"], "zip")

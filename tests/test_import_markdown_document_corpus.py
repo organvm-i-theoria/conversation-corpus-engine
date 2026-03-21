@@ -31,7 +31,9 @@ class ImportMarkdownDocumentCorpusTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = import_markdown_document_corpus(input_root, output_root, corpus_id="document-memory")
+            result = import_markdown_document_corpus(
+                input_root, output_root, corpus_id="document-memory"
+            )
 
             self.assertEqual(result["thread_count"], 1)
             self.assertTrue((output_root / "corpus" / "threads-index.json").exists())
@@ -43,12 +45,18 @@ class ImportMarkdownDocumentCorpusTests(unittest.TestCase):
             self.assertTrue((output_root / "corpus" / "source-snapshot.json").exists())
             self.assertTrue((output_root / "corpus" / "regression-gates.json").exists())
 
-            contract = json.loads((output_root / "corpus" / "contract.json").read_text(encoding="utf-8"))
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(contract["adapter_type"], "markdown-document")
             self.assertTrue(contract["source_signature_fingerprint"])
 
-            actions = json.loads((output_root / "corpus" / "action-ledger.json").read_text(encoding="utf-8"))
-            unresolved = json.loads((output_root / "corpus" / "unresolved-ledger.json").read_text(encoding="utf-8"))
+            actions = json.loads(
+                (output_root / "corpus" / "action-ledger.json").read_text(encoding="utf-8")
+            )
+            unresolved = json.loads(
+                (output_root / "corpus" / "unresolved-ledger.json").read_text(encoding="utf-8")
+            )
             self.assertGreaterEqual(len(actions), 1)
             self.assertGreaterEqual(len(unresolved), 1)
 
@@ -58,8 +66,12 @@ class ImportMarkdownDocumentCorpusTests(unittest.TestCase):
             output_root = Path(tmpdir) / "output"
             nested_root = input_root / "nested"
             nested_root.mkdir(parents=True, exist_ok=True)
-            (input_root / "TopLevel.md").write_text("# Top Level\n\nBuild the top level index.", encoding="utf-8")
-            (nested_root / "Nested.md").write_text("# Nested\n\nBuild the nested index.", encoding="utf-8")
+            (input_root / "TopLevel.md").write_text(
+                "# Top Level\n\nBuild the top level index.", encoding="utf-8"
+            )
+            (nested_root / "Nested.md").write_text(
+                "# Nested\n\nBuild the nested index.", encoding="utf-8"
+            )
 
             result = import_markdown_document_corpus(
                 input_root,
@@ -69,11 +81,15 @@ class ImportMarkdownDocumentCorpusTests(unittest.TestCase):
             )
 
             self.assertEqual(result["thread_count"], 1)
-            manifest = json.loads((output_root / "import-manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (output_root / "import-manifest.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(len(manifest), 1)
             self.assertIn("TopLevel.md", manifest[0]["source_markdown"])
 
-            contract = json.loads((output_root / "corpus" / "contract.json").read_text(encoding="utf-8"))
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(contract["collection_scope"], "top-level")
 
     def test_import_filters_noise_and_reduces_unresolved_overreach(self) -> None:
@@ -102,14 +118,26 @@ class ImportMarkdownDocumentCorpusTests(unittest.TestCase):
 
             import_markdown_document_corpus(input_root, output_root, corpus_id="document-memory")
 
-            actions = json.loads((output_root / "corpus" / "action-ledger.json").read_text(encoding="utf-8"))
-            unresolved = json.loads((output_root / "corpus" / "unresolved-ledger.json").read_text(encoding="utf-8"))
-            threads = json.loads((output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8"))
+            actions = json.loads(
+                (output_root / "corpus" / "action-ledger.json").read_text(encoding="utf-8")
+            )
+            unresolved = json.loads(
+                (output_root / "corpus" / "unresolved-ledger.json").read_text(encoding="utf-8")
+            )
+            threads = json.loads(
+                (output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(len(actions), 1)
-            self.assertEqual(actions[0]["canonical_action"], "We need to build the canonical queue before launch.")
+            self.assertEqual(
+                actions[0]["canonical_action"],
+                "We need to build the canonical queue before launch.",
+            )
             self.assertEqual(len(unresolved), 1)
-            self.assertEqual(unresolved[0]["canonical_question"], "Maybe the ontology still needs another review?")
+            self.assertEqual(
+                unresolved[0]["canonical_question"],
+                "Maybe the ontology still needs another review?",
+            )
             self.assertEqual(threads[0]["title_normalized"], "Master Plan")
 
 

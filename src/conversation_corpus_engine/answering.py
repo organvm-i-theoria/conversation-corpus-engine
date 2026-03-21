@@ -136,7 +136,9 @@ def build_documents(root: Path) -> dict[str, Any]:
     ledger_docs: list[dict[str, Any]] = []
 
     threads_index = load_json(root / "corpus" / "threads-index.json", default=[]) or []
-    semantic_index = load_json(root / "corpus" / "semantic-v3-index.json", default={"threads": []}) or {"threads": []}
+    semantic_index = load_json(
+        root / "corpus" / "semantic-v3-index.json", default={"threads": []}
+    ) or {"threads": []}
     pairs_index = load_json(root / "corpus" / "pairs-index.json", default=[]) or []
     doctrine_briefs = load_json(root / "corpus" / "doctrine-briefs.json", default=[]) or []
     family_dossiers = load_json(root / "corpus" / "family-dossiers.json", default=[]) or []
@@ -151,7 +153,9 @@ def build_documents(root: Path) -> dict[str, Any]:
     for item in threads_index:
         thread_uid = item["thread_uid"]
         thread_family_map[thread_uid] = item.get("family_ids", [])
-        thread_title_map[thread_uid] = item.get("title_normalized") or item.get("title_raw") or thread_uid
+        thread_title_map[thread_uid] = (
+            item.get("title_normalized") or item.get("title_raw") or thread_uid
+        )
 
     family_title_map: dict[str, str] = {}
     family_canonical_thread_map: dict[str, str] = {}
@@ -161,8 +165,12 @@ def build_documents(root: Path) -> dict[str, Any]:
         family_id = item["family_id"]
         family_title_map[family_id] = item.get("canonical_title") or family_id
         family_canonical_thread_map[family_id] = item.get("canonical_thread_uid") or ""
-        family_theme_map[family_id] = item.get("stable_themes", []) or item.get("dominant_themes", [])
-        family_entity_map[family_id] = [entry["canonical_label"] for entry in item.get("key_entities", [])]
+        family_theme_map[family_id] = item.get("stable_themes", []) or item.get(
+            "dominant_themes", []
+        )
+        family_entity_map[family_id] = [
+            entry["canonical_label"] for entry in item.get("key_entities", [])
+        ]
 
     for item in doctrine_briefs:
         document = {
@@ -174,7 +182,10 @@ def build_documents(root: Path) -> dict[str, Any]:
             "family_ids": [item["family_id"]],
             "canonical_thread_uid": item.get("canonical_thread_uid"),
             "thread_uid": item.get("canonical_thread_uid"),
-            "citations": [f"family:{item['family_id']}", f"thread:{item.get('canonical_thread_uid')}"],
+            "citations": [
+                f"family:{item['family_id']}",
+                f"thread:{item.get('canonical_thread_uid')}",
+            ],
             "vector_terms": item.get("vector_terms", {}),
             "payload": item,
         }
@@ -191,7 +202,10 @@ def build_documents(root: Path) -> dict[str, Any]:
             "family_ids": [item["family_id"]],
             "canonical_thread_uid": item.get("canonical_thread_uid"),
             "thread_uid": item.get("canonical_thread_uid"),
-            "citations": [f"family:{item['family_id']}", f"thread:{item.get('canonical_thread_uid')}"],
+            "citations": [
+                f"family:{item['family_id']}",
+                f"thread:{item.get('canonical_thread_uid')}",
+            ],
             "vector_terms": item.get("vector_terms", {}),
             "payload": item,
         }
@@ -235,7 +249,8 @@ def build_documents(root: Path) -> dict[str, Any]:
         document = {
             "kind": "thread_semantic",
             "doc_id": f"thread-semantic:{item['thread_uid']}",
-            "title": item.get("title") or thread_title_map.get(item["thread_uid"], item["thread_uid"]),
+            "title": item.get("title")
+            or thread_title_map.get(item["thread_uid"], item["thread_uid"]),
             "text": item.get("search_text") or item.get("summary") or "",
             "family_ids": family_ids,
             "canonical_thread_uid": canonical_thread_uid,
@@ -248,7 +263,9 @@ def build_documents(root: Path) -> dict[str, Any]:
         thread_docs.append(document)
 
     for item in pairs_index:
-        family_ids = item.get("family_ids") or thread_family_map.get(item.get("thread_uid") or "", [])
+        family_ids = item.get("family_ids") or thread_family_map.get(
+            item.get("thread_uid") or "", []
+        )
         canonical_thread_uid = canonical_thread_for_families(
             family_ids,
             family_canonical_thread_map,
@@ -256,7 +273,8 @@ def build_documents(root: Path) -> dict[str, Any]:
         document = {
             "kind": "pair",
             "doc_id": f"pair:{item['pair_id']}",
-            "title": item.get("title") or thread_title_map.get(item.get("thread_uid") or "", item["pair_id"]),
+            "title": item.get("title")
+            or thread_title_map.get(item.get("thread_uid") or "", item["pair_id"]),
             "text": item.get("search_text") or item.get("summary") or "",
             "family_ids": family_ids,
             "canonical_thread_uid": canonical_thread_uid,
@@ -330,7 +348,10 @@ def build_documents(root: Path) -> dict[str, Any]:
                 "family_id": family["canonical_family_id"],
                 "family_ids": [family["canonical_family_id"]],
                 "thread_uid": item.get("to_thread_uid"),
-                "citations": [f"family:{family['canonical_family_id']}", f"thread:{item.get('to_thread_uid')}"],
+                "citations": [
+                    f"family:{family['canonical_family_id']}",
+                    f"thread:{item.get('to_thread_uid')}",
+                ],
                 "vector_terms": item.get("vector_terms", {}),
                 "payload": item,
             }
@@ -345,7 +366,9 @@ def build_documents(root: Path) -> dict[str, Any]:
         entity_alias_map[label].extend(item.get("aliases") or [])
     for item in entity_aliases:
         entity_alias_map[item.get("canonical_label") or ""].extend(item.get("labels") or [])
-    entity_alias_map = {key: unique_preserve(value) for key, value in entity_alias_map.items() if key}
+    entity_alias_map = {
+        key: unique_preserve(value) for key, value in entity_alias_map.items() if key
+    }
 
     return {
         "documents": documents,
@@ -374,20 +397,34 @@ def expand_query_tokens(query: str, corpus: dict[str, Any]) -> list[str]:
     for label, aliases in corpus.get("entity_alias_map", {}).items():
         label_tokens = tokenize(label)
         alias_text = " ".join(aliases).lower()
-        label_token_overlap = base_token_set & set(token for token in label_tokens if token not in STOP_WORDS)
+        label_token_overlap = base_token_set & set(
+            token for token in label_tokens if token not in STOP_WORDS
+        )
         alias_token_overlap = False
         for alias in aliases:
             alias_tokens = set(token for token in tokenize(alias) if token not in STOP_WORDS)
             if base_token_set & alias_tokens:
                 alias_token_overlap = True
                 break
-        if label.lower() in lower_query or label_token_overlap or alias_text and any(alias.lower() in lower_query for alias in aliases if alias) or alias_token_overlap:
+        if (
+            label.lower() in lower_query
+            or label_token_overlap
+            or alias_text
+            and any(alias.lower() in lower_query for alias in aliases if alias)
+            or alias_token_overlap
+        ):
             expanded.extend(label_tokens)
 
     for family_id, themes in corpus.get("family_theme_map", {}).items():
         if family_id and any(theme in lower_query for theme in themes):
             expanded.extend(themes[:4])
-            expanded.extend(tokenize(corpus.get("family_entity_map", {}).get(family_id, [""])[0] if corpus.get("family_entity_map", {}).get(family_id) else ""))
+            expanded.extend(
+                tokenize(
+                    corpus.get("family_entity_map", {}).get(family_id, [""])[0]
+                    if corpus.get("family_entity_map", {}).get(family_id)
+                    else ""
+                )
+            )
         for document in corpus.get("family_docs", []):
             if document.get("family_id") != family_id:
                 continue
@@ -425,7 +462,9 @@ def score_document(
     title_boost = title_hits / max(1, len(query_tokens))
     text_boost = text_hits / max(1, len(query_tokens))
     vector_score = sum(vector_terms.get(token, 0.0) for token in query_tokens)
-    phrase_boost = 0.8 if lower_query and (lower_query in lower_title or lower_query in lower_text) else 0.0
+    phrase_boost = (
+        0.8 if lower_query and (lower_query in lower_title or lower_query in lower_text) else 0.0
+    )
 
     family_prior = 0.0
     for family_id in document.get("family_ids", []):
@@ -436,7 +475,13 @@ def score_document(
     if (
         document.get("canonical_thread_uid")
         and document.get("thread_uid") == document.get("canonical_thread_uid")
-        and (coverage > 0 or vector_score > 0 or phrase_boost > 0 or family_prior > 0 or thread_prior > 0)
+        and (
+            coverage > 0
+            or vector_score > 0
+            or phrase_boost > 0
+            or family_prior > 0
+            or thread_prior > 0
+        )
     ):
         canonical_thread_boost = 0.25
 
@@ -542,7 +587,9 @@ def rerank_thread_hits(
         thread_uid = item.get("thread_uid")
         if not thread_uid:
             continue
-        best_pair_score_by_thread[thread_uid] = max(best_pair_score_by_thread[thread_uid], item.get("score", 0.0))
+        best_pair_score_by_thread[thread_uid] = max(
+            best_pair_score_by_thread[thread_uid], item.get("score", 0.0)
+        )
         best_pair_support_by_thread[thread_uid] = max(
             best_pair_support_by_thread[thread_uid],
             lexical_support_for_tokens(raw_query_tokens, item),
@@ -677,7 +724,9 @@ def merge_rankings(rankings: list[list[dict[str, Any]]], *, limit: int) -> list[
     return merged[:limit]
 
 
-def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | None = None) -> dict[str, Any]:
+def search_documents_v4(
+    root: Path, query: str, *, limit: int = 8, mode: str | None = None
+) -> dict[str, Any]:
     corpus = build_documents(root)
     raw_query_tokens = tokenize(query)
     query_tokens = expand_query_tokens(query, corpus)
@@ -707,7 +756,9 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     for family_id, score in top_family_scores.items():
         canonical_thread_uid = corpus["family_canonical_thread_map"].get(family_id)
         if canonical_thread_uid:
-            top_thread_context[canonical_thread_uid] = max(top_thread_context.get(canonical_thread_uid, 0.0), score)
+            top_thread_context[canonical_thread_uid] = max(
+                top_thread_context.get(canonical_thread_uid, 0.0), score
+            )
 
     if mode == "family_brief":
         merged_hits = family_hits[:limit]
@@ -726,7 +777,9 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     thread_candidates = corpus["thread_docs"]
     if mode is None and top_family_ids:
         thread_candidates = [
-            item for item in thread_candidates if set(item.get("family_ids", [])) & set(top_family_ids)
+            item
+            for item in thread_candidates
+            if set(item.get("family_ids", [])) & set(top_family_ids)
         ] or thread_candidates
     thread_hits = rank_documents(
         query,
@@ -753,7 +806,9 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     pair_candidates = corpus["pair_docs"]
     if mode is None and top_family_ids:
         pair_candidates = [
-            item for item in pair_candidates if set(item.get("family_ids", [])) & set(top_family_ids)
+            item
+            for item in pair_candidates
+            if set(item.get("family_ids", [])) & set(top_family_ids)
         ] or pair_candidates
     pair_hits = rank_documents(
         query,
@@ -786,7 +841,11 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     elif mode == "timeline":
         ledger_candidates = [item for item in ledger_candidates if item["kind"] == "timeline"]
     elif mode is None and top_family_ids:
-        filtered = [item for item in ledger_candidates if set(item.get("family_ids", [])) & set(top_family_ids)]
+        filtered = [
+            item
+            for item in ledger_candidates
+            if set(item.get("family_ids", [])) & set(top_family_ids)
+        ]
         if filtered:
             ledger_candidates = filtered
     ledger_hits = rank_documents(
@@ -802,7 +861,9 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     if mode in {"action", "unresolved", "timeline"}:
         merged_hits = ledger_hits[:limit]
     else:
-        merged_hits = merge_rankings([family_hits, thread_hits, pair_hits, ledger_hits], limit=limit)
+        merged_hits = merge_rankings(
+            [family_hits, thread_hits, pair_hits, ledger_hits], limit=limit
+        )
 
     return {
         "query": query,
@@ -817,7 +878,9 @@ def search_documents_v4(root: Path, query: str, *, limit: int = 8, mode: str | N
     }
 
 
-def select_primary_evidence(retrieval: dict[str, Any], *, mode: str | None = None) -> list[dict[str, Any]]:
+def select_primary_evidence(
+    retrieval: dict[str, Any], *, mode: str | None = None
+) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
     if mode in {"action", "unresolved", "timeline"}:
@@ -849,7 +912,9 @@ def select_primary_evidence(retrieval: dict[str, Any], *, mode: str | None = Non
     return evidence
 
 
-def determine_answer_state(retrieval: dict[str, Any], *, mode: str | None = None) -> tuple[str, float, str]:
+def determine_answer_state(
+    retrieval: dict[str, Any], *, mode: str | None = None
+) -> tuple[str, float, str]:
     top_hit = (retrieval.get("hits") or [None])[0]
     top_family = (retrieval.get("family_hits") or [None])[0]
     top_thread = (retrieval.get("thread_hits") or [None])[0]
@@ -867,24 +932,62 @@ def determine_answer_state(retrieval: dict[str, Any], *, mode: str | None = None
     if not top_hit or top_hit.get("score", 0.0) < 1.0:
         return "abstain", 0.2, "No document scored strongly enough for a reliable answer."
     if lexical_signal < 0.34 and semantic_signal <= 0.2:
-        return "abstain", 0.18, "Top-ranked evidence lacks enough lexical or semantic support for the query."
+        return (
+            "abstain",
+            0.18,
+            "Top-ranked evidence lacks enough lexical or semantic support for the query.",
+        )
     if mode in {"action", "unresolved", "timeline"}:
         if top_hit.get("score", 0.0) >= 1.3:
-            return "grounded", min(0.95, 0.55 + (top_hit["score"] / 6.0)), "Top ledger evidence is strong."
-        return "limited", min(0.8, 0.45 + (top_hit["score"] / 8.0)), "The ledger match is usable but not deep."
-    if top_family and top_thread and top_family.get("score", 0.0) >= 1.6 and top_thread.get("score", 0.0) >= 1.3:
-        confidence = min(0.97, 0.55 + ((top_family["score"] + top_thread["score"] + (top_pair or {}).get("score", 0.0)) / 8.5))
+            return (
+                "grounded",
+                min(0.95, 0.55 + (top_hit["score"] / 6.0)),
+                "Top ledger evidence is strong.",
+            )
+        return (
+            "limited",
+            min(0.8, 0.45 + (top_hit["score"] / 8.0)),
+            "The ledger match is usable but not deep.",
+        )
+    if (
+        top_family
+        and top_thread
+        and top_family.get("score", 0.0) >= 1.6
+        and top_thread.get("score", 0.0) >= 1.3
+    ):
+        confidence = min(
+            0.97,
+            0.55
+            + (
+                (top_family["score"] + top_thread["score"] + (top_pair or {}).get("score", 0.0))
+                / 8.5
+            ),
+        )
         return "grounded", round(confidence, 4), "Family and thread evidence align."
     if top_family and top_family.get("score", 0.0) >= 1.4:
         confidence = min(0.84, 0.45 + (top_family["score"] / 7.0))
-        return "limited", round(confidence, 4), "Family-level evidence is stronger than thread-level evidence."
+        return (
+            "limited",
+            round(confidence, 4),
+            "Family-level evidence is stronger than thread-level evidence.",
+        )
     if top_thread and top_thread.get("score", 0.0) >= 1.2:
         confidence = min(0.78, 0.4 + (top_thread["score"] / 7.5))
-        return "limited", round(confidence, 4), "Thread evidence exists, but synthesis support is thin."
-    return "abstain", 0.3, "Evidence is present but too weak or ambiguous to support a confident answer."
+        return (
+            "limited",
+            round(confidence, 4),
+            "Thread evidence exists, but synthesis support is thin.",
+        )
+    return (
+        "abstain",
+        0.3,
+        "Evidence is present but too weak or ambiguous to support a confident answer.",
+    )
 
 
-def build_answer(query: str, retrieval: dict[str, Any], *, mode: str | None = None) -> dict[str, Any]:
+def build_answer(
+    query: str, retrieval: dict[str, Any], *, mode: str | None = None
+) -> dict[str, Any]:
     hits = retrieval.get("hits", [])
     if not hits:
         return {
@@ -946,7 +1049,8 @@ def build_answer(query: str, retrieval: dict[str, Any], *, mode: str | None = No
                 (
                     item["payload"]
                     for item in retrieval.get("family_hits", []) + retrieval.get("hits", [])
-                    if item.get("kind") == "family_dossier" and item.get("family_id") == top_family.get("family_id")
+                    if item.get("kind") == "family_dossier"
+                    and item.get("family_id") == top_family.get("family_id")
                 ),
                 {},
             )
@@ -957,8 +1061,12 @@ def build_answer(query: str, retrieval: dict[str, Any], *, mode: str | None = No
             family_text = payload.get("brief_text") or payload.get("doctrine_summary")
             if family_text:
                 corpus_facts.append(shorten(family_text, 260))
-            family_actions = payload.get("actions") or companion_dossier_payload.get("actions") or []
-            family_unresolved = payload.get("unresolved") or companion_dossier_payload.get("unresolved") or []
+            family_actions = (
+                payload.get("actions") or companion_dossier_payload.get("actions") or []
+            )
+            family_unresolved = (
+                payload.get("unresolved") or companion_dossier_payload.get("unresolved") or []
+            )
             if family_actions:
                 first_action = family_actions[0]
                 citations.append(f"action:{first_action.get('action_key')}")
@@ -986,13 +1094,19 @@ def build_answer(query: str, retrieval: dict[str, Any], *, mode: str | None = No
                 f"Pair-level evidence surfaces {shorten(top_pair.get('snippet') or top_pair.get('text') or '', 180) or top_pair['doc_id']}.",
             )
         if not top_thread and top_family:
-            ambiguity.append("Family synthesis is stronger than thread-specific retrieval for this query.")
+            ambiguity.append(
+                "Family synthesis is stronger than thread-specific retrieval for this query."
+            )
         if not top_pair and answer_state != "abstain":
             ambiguity.append("Pair-level evidence is sparse for this query.")
         if top_ledger and top_ledger["kind"] == "unresolved":
             payload = top_ledger["payload"]
             citations.extend(top_ledger.get("citations", []))
-            ambiguity.append(payload.get("canonical_question") or payload.get("question_key") or "An unresolved item remains open.")
+            ambiguity.append(
+                payload.get("canonical_question")
+                or payload.get("question_key")
+                or "An unresolved item remains open."
+            )
 
     if answer_state == "abstain":
         answer_lines.append("Evidence is too weak or ambiguous to answer confidently.")
@@ -1042,15 +1156,27 @@ def build_answer(query: str, retrieval: dict[str, Any], *, mode: str | None = No
             "query_tokens": retrieval.get("query_tokens", []),
             "expanded_query_tokens": retrieval.get("expanded_query_tokens", []),
             "family_hits": [
-                {"doc_id": item["doc_id"], "score": item["score"], "citations": item.get("citations", [])}
+                {
+                    "doc_id": item["doc_id"],
+                    "score": item["score"],
+                    "citations": item.get("citations", []),
+                }
                 for item in retrieval.get("family_hits", [])[:4]
             ],
             "thread_hits": [
-                {"doc_id": item["doc_id"], "score": item["score"], "citations": item.get("citations", [])}
+                {
+                    "doc_id": item["doc_id"],
+                    "score": item["score"],
+                    "citations": item.get("citations", []),
+                }
                 for item in retrieval.get("thread_hits", [])[:4]
             ],
             "pair_hits": [
-                {"doc_id": item["doc_id"], "score": item["score"], "citations": item.get("citations", [])}
+                {
+                    "doc_id": item["doc_id"],
+                    "score": item["score"],
+                    "citations": item.get("citations", []),
+                }
                 for item in retrieval.get("pair_hits", [])[:4]
             ],
         },

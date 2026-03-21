@@ -162,7 +162,9 @@ def resolve_live_entry(
         return defaults[0]
     if len(registry) == 1:
         return registry[0]
-    raise ValueError("A live corpus id or provider is required when multiple active corpora are registered.")
+    raise ValueError(
+        "A live corpus id or provider is required when multiple active corpora are registered."
+    )
 
 
 def write_candidate_artifacts(
@@ -182,7 +184,9 @@ def write_candidate_artifacts(
     write_markdown(diff_markdown_path, render_corpus_diff(diff_payload))
     write_markdown(memo_path, render_corpus_candidate(manifest))
     write_json(corpus_candidate_latest_json_path(project_root), manifest)
-    write_markdown(corpus_candidate_latest_markdown_path(project_root), render_corpus_candidate(manifest))
+    write_markdown(
+        corpus_candidate_latest_markdown_path(project_root), render_corpus_candidate(manifest)
+    )
     write_json(corpus_diff_latest_json_path(project_root), diff_payload)
     write_markdown(corpus_diff_latest_markdown_path(project_root), render_corpus_diff(diff_payload))
     return {
@@ -212,7 +216,9 @@ def stage_corpus_candidate(
         provider=provider,
     )
     if Path(live_entry["root"]).resolve() == resolved_candidate_root:
-        raise ValueError("Candidate root matches the current live root; stage a distinct corpus build.")
+        raise ValueError(
+            "Candidate root matches the current live root; stage a distinct corpus build."
+        )
 
     candidate_id = f"corpus-{timestamp_slug()}"
     diff_payload = build_corpus_diff_payload(
@@ -235,7 +241,9 @@ def stage_corpus_candidate(
         "diff_summary": diff_payload.get("summary") or {},
         "diff_evaluation": diff_payload.get("evaluation") or {},
     }
-    artifact_paths = write_candidate_artifacts(resolved_project_root, candidate_id, manifest, diff_payload)
+    artifact_paths = write_candidate_artifacts(
+        resolved_project_root, candidate_id, manifest, diff_payload
+    )
     manifest.update(artifact_paths)
     write_json(Path(artifact_paths["manifest_path"]), manifest)
     write_json(corpus_candidate_latest_json_path(resolved_project_root), manifest)
@@ -254,17 +262,24 @@ def stage_corpus_candidate(
     return manifest
 
 
-def load_corpus_candidate_manifest(project_root: Path, candidate_id: str = "latest") -> dict[str, Any]:
+def load_corpus_candidate_manifest(
+    project_root: Path, candidate_id: str = "latest"
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     if candidate_id == "latest":
-        payload = load_json(corpus_candidate_latest_json_path(resolved_project_root), default={}) or {}
+        payload = (
+            load_json(corpus_candidate_latest_json_path(resolved_project_root), default={}) or {}
+        )
         if payload:
             return payload
         raise ValueError("No staged corpus candidate is available.")
-    payload = load_json(
-        corpus_candidates_dir(resolved_project_root) / candidate_id / "manifest.json",
-        default={},
-    ) or {}
+    payload = (
+        load_json(
+            corpus_candidates_dir(resolved_project_root) / candidate_id / "manifest.json",
+            default={},
+        )
+        or {}
+    )
     if not payload:
         raise ValueError(f"No staged corpus candidate exists for id: {candidate_id}")
     return payload
@@ -292,7 +307,10 @@ def review_corpus_candidate(
         manifest,
     )
     write_json(corpus_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(corpus_candidate_latest_markdown_path(resolved_project_root), render_corpus_candidate(manifest))
+    write_markdown(
+        corpus_candidate_latest_markdown_path(resolved_project_root),
+        render_corpus_candidate(manifest),
+    )
     append_history(
         corpus_candidate_review_history_path(resolved_project_root),
         {
@@ -327,7 +345,11 @@ def sync_provider_source_policy(
     if not changed:
         return None
 
-    primary_root = promoted_root if primary_corpus_id == live_corpus_id else Path(current_policy["primary_root"])
+    primary_root = (
+        promoted_root
+        if primary_corpus_id == live_corpus_id
+        else Path(current_policy["primary_root"])
+    )
     fallback_root_value = current_policy.get("fallback_root")
     fallback_root = None
     if fallback_corpus_id:
@@ -377,11 +399,15 @@ def restore_provider_source_policy(
     )
 
 
-def promote_corpus_candidate(project_root: Path, candidate_id: str, *, note: str = "") -> dict[str, Any]:
+def promote_corpus_candidate(
+    project_root: Path, candidate_id: str, *, note: str = ""
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     manifest = load_corpus_candidate_manifest(resolved_project_root, candidate_id=candidate_id)
     if manifest.get("status") != "approved":
-        raise ValueError(f"Corpus candidate {candidate_id} must be approved before it can be promoted.")
+        raise ValueError(
+            f"Corpus candidate {candidate_id} must be approved before it can be promoted."
+        )
 
     live_entry = resolve_live_entry(
         resolved_project_root,
@@ -428,7 +454,10 @@ def promote_corpus_candidate(project_root: Path, candidate_id: str, *, note: str
         manifest,
     )
     write_json(corpus_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(corpus_candidate_latest_markdown_path(resolved_project_root), render_corpus_candidate(manifest))
+    write_markdown(
+        corpus_candidate_latest_markdown_path(resolved_project_root),
+        render_corpus_candidate(manifest),
+    )
 
     payload = {
         "candidate_id": manifest["candidate_id"],
@@ -442,7 +471,10 @@ def promote_corpus_candidate(project_root: Path, candidate_id: str, *, note: str
         "federation_summary_path": federation_result.get("summary_markdown_path"),
     }
     write_json(corpus_promotion_latest_json_path(resolved_project_root), payload)
-    write_markdown(corpus_promotion_latest_markdown_path(resolved_project_root), render_corpus_promotion(payload))
+    write_markdown(
+        corpus_promotion_latest_markdown_path(resolved_project_root),
+        render_corpus_promotion(payload),
+    )
     append_history(
         corpus_promotion_history_path(resolved_project_root),
         {
@@ -459,7 +491,9 @@ def promote_corpus_candidate(project_root: Path, candidate_id: str, *, note: str
     return payload
 
 
-def rollback_corpus_promotion(project_root: Path, *, target: str = "previous", note: str = "") -> dict[str, Any]:
+def rollback_corpus_promotion(
+    project_root: Path, *, target: str = "previous", note: str = ""
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     history = load_json(
         corpus_promotion_history_path(resolved_project_root),
@@ -506,7 +540,9 @@ def rollback_corpus_promotion(project_root: Path, *, target: str = "previous", n
             "restored_root": previous_live_entry["root"],
         },
     )
-    manifest = load_corpus_candidate_manifest(resolved_project_root, candidate_id=entry["candidate_id"])
+    manifest = load_corpus_candidate_manifest(
+        resolved_project_root, candidate_id=entry["candidate_id"]
+    )
     manifest["status"] = "rolled-back"
     manifest["rollback"] = {
         "recorded_at": recorded_at,
@@ -518,7 +554,10 @@ def rollback_corpus_promotion(project_root: Path, *, target: str = "previous", n
         manifest,
     )
     write_json(corpus_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(corpus_candidate_latest_markdown_path(resolved_project_root), render_corpus_candidate(manifest))
+    write_markdown(
+        corpus_candidate_latest_markdown_path(resolved_project_root),
+        render_corpus_candidate(manifest),
+    )
 
     payload = {
         "recorded_at": recorded_at,

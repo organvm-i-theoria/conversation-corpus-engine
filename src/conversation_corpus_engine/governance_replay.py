@@ -114,7 +114,9 @@ def build_policy_replay_payload(
         cases.append(case)
 
     active_corpus_count = len(cases)
-    manual_pass_rate = round(manual_pass_count / active_corpus_count, 4) if active_corpus_count else None
+    manual_pass_rate = (
+        round(manual_pass_count / active_corpus_count, 4) if active_corpus_count else None
+    )
     thresholds = dict(policy.get("thresholds") or {})
     metrics = {
         "fail_corpus_count": float(fail_corpus_count),

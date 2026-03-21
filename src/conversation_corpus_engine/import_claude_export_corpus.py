@@ -107,7 +107,9 @@ def now_iso() -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Import a Claude JSON export bundle into a federation-compatible memory corpus.")
+    parser = argparse.ArgumentParser(
+        description="Import a Claude JSON export bundle into a federation-compatible memory corpus."
+    )
     parser.add_argument("input_path", type=Path)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--name")
@@ -128,12 +130,16 @@ def resolve_bundle_root(input_path: Path) -> Path:
         if input_path.name == "conversations.json":
             bundle_root = input_path.parent
         else:
-            raise ValueError(f"Expected a Claude export directory or conversations.json file, got {input_path}")
+            raise ValueError(
+                f"Expected a Claude export directory or conversations.json file, got {input_path}"
+            )
     else:
         bundle_root = input_path
     missing = [name for name in REQUIRED_BUNDLE_FILES if not (bundle_root / name).exists()]
     if missing:
-        raise FileNotFoundError(f"Claude export bundle at {bundle_root} is missing required files: {', '.join(missing)}")
+        raise FileNotFoundError(
+            f"Claude export bundle at {bundle_root} is missing required files: {', '.join(missing)}"
+        )
     return bundle_root
 
 
@@ -156,22 +162,31 @@ def split_sentences(text: str) -> list[str]:
             continue
         rough.extend(
             part.strip()
-            for part in stripped_line.replace("?", "?\n").replace("!", "!\n").replace(".", ".\n").splitlines()
+            for part in stripped_line.replace("?", "?\n")
+            .replace("!", "!\n")
+            .replace(".", ".\n")
+            .splitlines()
         )
     return [normalize_whitespace(item) for item in rough if normalize_whitespace(item)]
 
 
 def top_keywords(text: str, *, limit: int = 12) -> list[str]:
-    counts = Counter(token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2)
+    counts = Counter(
+        token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2
+    )
     return [token for token, _ in counts.most_common(limit)]
 
 
 def vector_terms(text: str, *, limit: int = 18) -> dict[str, float]:
-    counts = Counter(token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2)
+    counts = Counter(
+        token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2
+    )
     if not counts:
         return {}
     highest = max(counts.values())
-    return {token: round(count / highest, 4) for token, count in counts.most_common(limit)}  # allow-secret
+    return {
+        token: round(count / highest, 4) for token, count in counts.most_common(limit)  # allow-secret
+    }
 
 
 def dedupe_preserve(values: list[str]) -> list[str]:
@@ -283,7 +298,9 @@ def sorted_messages(conversation: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(conversation.get("chat_messages") or [], key=timestamp_for_message)
 
 
-def build_pairs(messages: list[dict[str, Any]], thread_uid: str, family_id: str) -> list[dict[str, Any]]:
+def build_pairs(
+    messages: list[dict[str, Any]], thread_uid: str, family_id: str
+) -> list[dict[str, Any]]:
     pairs: list[dict[str, Any]] = []
     current_prompt = ""
     current_response_parts: list[str] = []
@@ -305,7 +322,9 @@ def build_pairs(messages: list[dict[str, Any]], thread_uid: str, family_id: str)
                     {
                         "pair_id": pair_id,
                         "thread_uid": thread_uid,
-                        "title": current_title or shorten(current_prompt, 80) or f"Claude Pair {pair_index:03d}",
+                        "title": current_title
+                        or shorten(current_prompt, 80)
+                        or f"Claude Pair {pair_index:03d}",
                         "summary": summary,
                         "search_text": f"{pair_id} {current_prompt} {response_text}",
                         "themes": top_keywords(f"{current_prompt} {response_text}", limit=8),
@@ -347,7 +366,9 @@ def build_pairs(messages: list[dict[str, Any]], thread_uid: str, family_id: str)
 def build_entities(title: str, keywords: list[str]) -> list[dict[str, str]]:
     entities = [{"canonical_label": title, "entity_type": "conversation"}]
     for keyword in keywords[:3]:
-        entities.append({"canonical_label": keyword.replace("-", " ").title(), "entity_type": "concept"})
+        entities.append(
+            {"canonical_label": keyword.replace("-", " ").title(), "entity_type": "concept"}
+        )
     seen: set[str] = set()
     result: list[dict[str, str]] = []
     for entity in entities:
@@ -513,9 +534,15 @@ def import_claude_export_corpus(
                 "stable_themes": keywords[:8],
                 "doctrine_summary": f"{title} imported Claude conversation summary: {summary}",
                 "search_text": f"{title} doctrine {' '.join(keywords[:10])} {combined_text}",
-                "actions": [{"action_key": item["action_key"], "canonical_action": item["canonical_action"]} for item in action_items],
+                "actions": [
+                    {"action_key": item["action_key"], "canonical_action": item["canonical_action"]}
+                    for item in action_items
+                ],
                 "unresolved": [
-                    {"question_key": item["question_key"], "canonical_question": item["canonical_question"]}
+                    {
+                        "question_key": item["question_key"],
+                        "canonical_question": item["canonical_question"],
+                    }
                     for item in unresolved_items
                 ],
                 "key_entities": key_entities,

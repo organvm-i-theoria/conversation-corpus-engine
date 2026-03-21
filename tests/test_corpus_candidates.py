@@ -21,7 +21,9 @@ from conversation_corpus_engine.source_policy import load_source_policy, set_sou
 
 
 def token_map(*tokens: str) -> dict[str, float]:
-    return {token: round(1.0 - (index * 0.08), 4) for index, token in enumerate(tokens)}  # allow-secret
+    return {
+        token: round(1.0 - (index * 0.08), 4) for index, token in enumerate(tokens)  # allow-secret
+    }
 
 
 def seed_corpus(
@@ -115,7 +117,9 @@ def seed_corpus(
                     "doctrine_summary": f"{family_title} doctrine.",
                     "search_text": f"{family_title} {action_text}",
                     "actions": [{"action_key": action_key, "canonical_action": action_text}],
-                    "unresolved": [{"question_key": question_key, "canonical_question": question_text}],
+                    "unresolved": [
+                        {"question_key": question_key, "canonical_question": question_text}
+                    ],
                     "key_entities": [{"canonical_label": entity_label, "entity_type": "concept"}],
                     "vector_terms": vectors,
                 },
@@ -268,14 +272,18 @@ class CorpusCandidatesTests(unittest.TestCase):
             )
             registry_after_rollback = list_registered_corpora(project_root)
             source_policy_after_rollback = load_source_policy(project_root, "claude")
-            history = json.loads(corpus_candidate_history_path(project_root).read_text(encoding="utf-8"))
+            history = json.loads(
+                corpus_candidate_history_path(project_root).read_text(encoding="utf-8")
+            )
             manifest = load_corpus_candidate_manifest(project_root, staged["candidate_id"])
 
             self.assertEqual(staged["status"], "staged")
             self.assertEqual(approved["status"], "approved")
             self.assertEqual(promoted["live_corpus_id"], "claude-local-session-memory")
             self.assertEqual(registry_after_promote[0]["root"], str(candidate_root.resolve()))
-            self.assertEqual(source_policy_after_promote["primary_root"], str(candidate_root.resolve()))
+            self.assertEqual(
+                source_policy_after_promote["primary_root"], str(candidate_root.resolve())
+            )
             self.assertEqual(rolled_back["source_candidate_id"], staged["candidate_id"])
             self.assertEqual(registry_after_rollback[0]["root"], str(live_root.resolve()))
             self.assertEqual(source_policy_after_rollback["primary_root"], str(live_root.resolve()))

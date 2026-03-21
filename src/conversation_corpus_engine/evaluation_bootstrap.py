@@ -59,7 +59,9 @@ def resolve_target_root(
 
     resolved_project_root = project_root.resolve()
     source_drop_root = default_source_drop_root(resolved_project_root)
-    targets = provider_corpus_targets(resolved_project_root, provider, source_drop_root, registry=[])
+    targets = provider_corpus_targets(
+        resolved_project_root, provider, source_drop_root, registry=[]
+    )
     target = next((item for item in targets if item.get("selected")), targets[0])
     return Path(target["root"]).resolve(), {
         "provider": provider,
@@ -134,7 +136,9 @@ def bootstrap_provider_evaluation(
     if provider is not None:
         provider_name = get_provider_config(provider)["display_name"]
     else:
-        provider_name = (load_json(resolved_target_root / "corpus" / "contract.json", default={}) or {}).get(
+        provider_name = (
+            load_json(resolved_target_root / "corpus" / "contract.json", default={}) or {}
+        ).get(
             "name",
         ) or resolved_target_root.name
 

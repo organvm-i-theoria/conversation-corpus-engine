@@ -106,7 +106,9 @@ def load_federated_review_queue(project_root: Path) -> dict[str, Any]:
 
 def save_federated_review_queue(project_root: Path, payload: dict[str, Any]) -> None:
     payload["generated_at"] = now_iso()
-    payload["open_count"] = sum(1 for item in payload.get("items", []) if item.get("status") == "open")
+    payload["open_count"] = sum(
+        1 for item in payload.get("items", []) if item.get("status") == "open"
+    )
     write_json(federation_state_path(project_root, "federated-review-queue.json"), payload)
     write_json(federation_output_path(project_root, "review-queue.json"), payload)
 
@@ -139,7 +141,10 @@ def append_federated_review_history(
         "review_type": item.get("review_type"),
         "decision": decision,
         "note": note,
-        "canonical_subject": canonical_subject or item.get("canonical_subject") or item.get("suggested_canonical_subject") or "",
+        "canonical_subject": canonical_subject
+        or item.get("canonical_subject")
+        or item.get("suggested_canonical_subject")
+        or "",
         "subject_ids": item.get("subject_ids") or [],
         "source_corpora": item.get("source_corpora") or [],
         "recorded_at": now_iso(),
@@ -163,10 +168,14 @@ def add_decision_record(
     other_key = rejected_key if decision == "accepted" else accepted_key
     pair_key = decision_subject_key(subject_ids)
     decisions[target_key] = [
-        item for item in decisions.get(target_key, []) if decision_subject_key(item.get("subject_ids") or []) != pair_key
+        item
+        for item in decisions.get(target_key, [])
+        if decision_subject_key(item.get("subject_ids") or []) != pair_key
     ]
     decisions[other_key] = [
-        item for item in decisions.get(other_key, []) if decision_subject_key(item.get("subject_ids") or []) != pair_key
+        item
+        for item in decisions.get(other_key, [])
+        if decision_subject_key(item.get("subject_ids") or []) != pair_key
     ]
     decisions[target_key].append(
         {
@@ -191,7 +200,12 @@ def resolve_federated_review_item(
             continue
         item["status"] = decision
         item["decision_note"] = note
-        item["canonical_subject"] = canonical_subject or item.get("canonical_subject") or item.get("suggested_canonical_subject") or ""
+        item["canonical_subject"] = (
+            canonical_subject
+            or item.get("canonical_subject")
+            or item.get("suggested_canonical_subject")
+            or ""
+        )
         item["resolved_at"] = now_iso()
         item["updated_at"] = item["resolved_at"]
         save_federated_review_queue(project_root, queue)
@@ -202,7 +216,10 @@ def resolve_federated_review_item(
             note=note,
             canonical_subject=canonical_subject,
         )
-        if decision in {"accepted", "rejected"} and item.get("review_type") in FEDERATED_REVIEW_TYPES:
+        if (
+            decision in {"accepted", "rejected"}
+            and item.get("review_type") in FEDERATED_REVIEW_TYPES
+        ):
             decisions = load_federated_decisions(project_root)
             add_decision_record(
                 decisions,
@@ -263,9 +280,21 @@ def collect_family_records(surfaces: list[dict[str, Any]]) -> list[dict[str, Any
                 "canonical_thread_uid": item.get("canonical_thread_uid"),
                 "thread_uids": item.get("thread_uids") or [],
                 "stable_themes": brief.get("stable_themes") or dossier.get("stable_themes") or [],
-                "key_entities": [entity.get("canonical_label") for entity in dossier.get("key_entities", []) if entity.get("canonical_label")],
-                "actions": [action.get("canonical_action") for action in dossier.get("actions", []) if action.get("canonical_action")],
-                "unresolved": [question.get("canonical_question") for question in dossier.get("unresolved", []) if question.get("canonical_question")],
+                "key_entities": [
+                    entity.get("canonical_label")
+                    for entity in dossier.get("key_entities", [])
+                    if entity.get("canonical_label")
+                ],
+                "actions": [
+                    action.get("canonical_action")
+                    for action in dossier.get("actions", [])
+                    if action.get("canonical_action")
+                ],
+                "unresolved": [
+                    question.get("canonical_question")
+                    for question in dossier.get("unresolved", [])
+                    if question.get("canonical_question")
+                ],
                 "search_text": " ".join(
                     [
                         item.get("canonical_title") or "",
@@ -356,36 +385,73 @@ def collect_unresolved_records(surfaces: list[dict[str, Any]]) -> list[dict[str,
 
 
 def entity_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    label_score = 1.0 if normalize_label(left["canonical_label"]) == normalize_label(right["canonical_label"]) else 0.0
-    alias_score = jaccard(token_set([left["canonical_label"], *left.get("aliases", [])]), token_set([right["canonical_label"], *right.get("aliases", [])]))
+    label_score = (
+        1.0
+        if normalize_label(left["canonical_label"]) == normalize_label(right["canonical_label"])
+        else 0.0
+    )
+    alias_score = jaccard(
+        token_set([left["canonical_label"], *left.get("aliases", [])]),
+        token_set([right["canonical_label"], *right.get("aliases", [])]),
+    )
     return round(max(label_score, alias_score), 4)
 
 
 def family_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    title_score = 1.0 if normalize_label(left["canonical_title"]) == normalize_label(right["canonical_title"]) else jaccard(token_set(left["canonical_title"]), token_set(right["canonical_title"]))
-    theme_score = jaccard(token_set(left.get("stable_themes", [])), token_set(right.get("stable_themes", [])))
-    entity_score = jaccard(token_set(left.get("key_entities", [])), token_set(right.get("key_entities", [])))
+    title_score = (
+        1.0
+        if normalize_label(left["canonical_title"]) == normalize_label(right["canonical_title"])
+        else jaccard(token_set(left["canonical_title"]), token_set(right["canonical_title"]))
+    )
+    theme_score = jaccard(
+        token_set(left.get("stable_themes", [])), token_set(right.get("stable_themes", []))
+    )
+    entity_score = jaccard(
+        token_set(left.get("key_entities", [])), token_set(right.get("key_entities", []))
+    )
     action_score = jaccard(token_set(left.get("actions", [])), token_set(right.get("actions", [])))
-    return round(max(title_score, (0.6 * title_score) + (0.2 * theme_score) + (0.1 * entity_score) + (0.1 * action_score)), 4)
+    return round(
+        max(
+            title_score,
+            (0.6 * title_score) + (0.2 * theme_score) + (0.1 * entity_score) + (0.1 * action_score),
+        ),
+        4,
+    )
 
 
 def action_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    return round(max(
-        1.0 if normalize_label(left["canonical_action"]) == normalize_label(right["canonical_action"]) else 0.0,
-        jaccard(token_set(left["canonical_action"]), token_set(right["canonical_action"])),
-    ), 4)
+    return round(
+        max(
+            1.0
+            if normalize_label(left["canonical_action"])
+            == normalize_label(right["canonical_action"])
+            else 0.0,
+            jaccard(token_set(left["canonical_action"]), token_set(right["canonical_action"])),
+        ),
+        4,
+    )
 
 
 def unresolved_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    return round(max(
-        1.0 if normalize_label(left["canonical_question"]) == normalize_label(right["canonical_question"]) else 0.0,
-        jaccard(token_set(left["canonical_question"]), token_set(right["canonical_question"])),
-    ), 4)
+    return round(
+        max(
+            1.0
+            if normalize_label(left["canonical_question"])
+            == normalize_label(right["canonical_question"])
+            else 0.0,
+            jaccard(token_set(left["canonical_question"]), token_set(right["canonical_question"])),
+        ),
+        4,
+    )
 
 
 def contradiction_signal(left: dict[str, Any], right: dict[str, Any]) -> float:
-    title_score = jaccard(token_set(left.get("canonical_title", "")), token_set(right.get("canonical_title", "")))
-    theme_score = jaccard(token_set(left.get("stable_themes", [])), token_set(right.get("stable_themes", [])))
+    title_score = jaccard(
+        token_set(left.get("canonical_title", "")), token_set(right.get("canonical_title", ""))
+    )
+    theme_score = jaccard(
+        token_set(left.get("stable_themes", [])), token_set(right.get("stable_themes", []))
+    )
     if title_score >= 0.6 and theme_score <= 0.15:
         return round(title_score - theme_score, 4)
     return 0.0
@@ -428,7 +494,13 @@ def build_pair_suggestions(
                     "priority": "high" if score >= max(0.8, threshold + 0.15) else "medium",
                     "title": f"{left.get('canonical_title') or left.get('canonical_label') or left.get('canonical_action') or left.get('canonical_question')} <> {right.get('canonical_title') or right.get('canonical_label') or right.get('canonical_action') or right.get('canonical_question')}",
                     "subject_ids": subject_ids,
-                    "suggested_canonical_subject": slugify(left.get("canonical_title") or left.get("canonical_label") or left.get("canonical_action") or left.get("canonical_question"), limit=72),
+                    "suggested_canonical_subject": slugify(
+                        left.get("canonical_title")
+                        or left.get("canonical_label")
+                        or left.get("canonical_action")
+                        or left.get("canonical_question"),
+                        limit=72,
+                    ),
                     "canonical_subject": "",
                     "rationale": rationale,
                     "score": round(score, 4),
@@ -436,7 +508,9 @@ def build_pair_suggestions(
                     "updated_at": now_iso(),
                 },
             )
-    suggestions.sort(key=lambda item: (item["priority"] != "high", -item["score"], item["review_id"]))
+    suggestions.sort(
+        key=lambda item: (item["priority"] != "high", -item["score"], item["review_id"])
+    )
     return suggestions
 
 
@@ -449,7 +523,9 @@ def apply_decision_groups(
     record_map = {record["member_id"]: record for record in records}
     union = UnionFind(list(record_map.keys()))
     for decision in decisions.get(accepted_key, []):
-        subject_ids = [subject_id for subject_id in decision.get("subject_ids", []) if subject_id in record_map]
+        subject_ids = [
+            subject_id for subject_id in decision.get("subject_ids", []) if subject_id in record_map
+        ]
         if len(subject_ids) < 2:
             continue
         base = subject_ids[0]
@@ -462,12 +538,16 @@ def apply_decision_groups(
             (
                 decision.get("canonical_subject")
                 for decision in decisions.get(accepted_key, [])
-                if decision_subject_key(decision.get("subject_ids") or []) == decision_subject_key(member_ids)
+                if decision_subject_key(decision.get("subject_ids") or [])
+                == decision_subject_key(member_ids)
                 and decision.get("canonical_subject")
             ),
             "",
         )
-        group_id = canonical_subject or f"{canonical_subject_prefix}-{slugify(' '.join(member_ids), limit=72)}"
+        group_id = (
+            canonical_subject
+            or f"{canonical_subject_prefix}-{slugify(' '.join(member_ids), limit=72)}"
+        )
         groups[group_id] = members
     return groups
 
@@ -488,13 +568,22 @@ def materialize_canonical_entities(groups: dict[str, list[dict[str, Any]]]) -> l
     for canonical_id, members in sorted(groups.items()):
         labels = [member["canonical_label"] for member in members if member.get("canonical_label")]
         canonical_label = sorted(labels, key=lambda value: (len(value), value.lower()))[0]
-        aliases = sorted({alias for member in members for alias in ([member["canonical_label"]] + (member.get("aliases") or [])) if alias and alias != canonical_label})
+        aliases = sorted(
+            {
+                alias
+                for member in members
+                for alias in ([member["canonical_label"]] + (member.get("aliases") or []))
+                if alias and alias != canonical_label
+            }
+        )
         texts = [member.get("search_text") or "" for member in members]
         payload.append(
             {
                 "federated_entity_id": canonical_id,
                 "canonical_label": canonical_label,
-                "entity_type": Counter(member.get("entity_type") or "concept" for member in members).most_common(1)[0][0],
+                "entity_type": Counter(
+                    member.get("entity_type") or "concept" for member in members
+                ).most_common(1)[0][0],
                 "aliases": aliases,
                 "corpus_ids": sorted({member["corpus_id"] for member in members}),
                 "member_count": len(members),
@@ -511,10 +600,16 @@ def materialize_canonical_families(groups: dict[str, list[dict[str, Any]]]) -> l
     for canonical_id, members in sorted(groups.items()):
         titles = [member["canonical_title"] for member in members if member.get("canonical_title")]
         canonical_title = Counter(titles).most_common(1)[0][0]
-        theme_counts = Counter(theme for member in members for theme in member.get("stable_themes", []))
-        entity_counts = Counter(entity for member in members for entity in member.get("key_entities", []))
+        theme_counts = Counter(
+            theme for member in members for theme in member.get("stable_themes", [])
+        )
+        entity_counts = Counter(
+            entity for member in members for entity in member.get("key_entities", [])
+        )
         action_text = [action for member in members for action in member.get("actions", [])]
-        unresolved_text = [question for member in members for question in member.get("unresolved", [])]
+        unresolved_text = [
+            question for member in members for question in member.get("unresolved", [])
+        ]
         texts = [member.get("search_text") or "" for member in members]
         payload.append(
             {
@@ -536,7 +631,9 @@ def materialize_canonical_families(groups: dict[str, list[dict[str, Any]]]) -> l
                 "action_count": len(action_text),
                 "unresolved_count": len(unresolved_text),
                 "vector_terms": aggregate_vector_terms(texts + action_text + unresolved_text),
-                "search_text": " ".join([canonical_title] + texts + action_text + unresolved_text).strip(),
+                "search_text": " ".join(
+                    [canonical_title] + texts + action_text + unresolved_text
+                ).strip(),
             },
         )
     return payload
@@ -545,7 +642,9 @@ def materialize_canonical_families(groups: dict[str, list[dict[str, Any]]]) -> l
 def materialize_canonical_actions(groups: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for canonical_id, members in sorted(groups.items()):
-        canonical_action = Counter(member["canonical_action"] for member in members).most_common(1)[0][0]
+        canonical_action = Counter(member["canonical_action"] for member in members).most_common(1)[
+            0
+        ][0]
         payload.append(
             {
                 "federated_action_id": canonical_id,
@@ -553,19 +652,31 @@ def materialize_canonical_actions(groups: dict[str, list[dict[str, Any]]]) -> li
                 "corpus_ids": sorted({member["corpus_id"] for member in members}),
                 "member_count": len(members),
                 "member_actions": members,
-                "status": Counter(member.get("status") or "open" for member in members).most_common(1)[0][0],
-                "vector_terms": aggregate_vector_terms([member.get("search_text") or "" for member in members]),
-                "search_text": " ".join([canonical_action] + [member.get("search_text") or "" for member in members]).strip(),
+                "status": Counter(member.get("status") or "open" for member in members).most_common(
+                    1
+                )[0][0],
+                "vector_terms": aggregate_vector_terms(
+                    [member.get("search_text") or "" for member in members]
+                ),
+                "search_text": " ".join(
+                    [canonical_action] + [member.get("search_text") or "" for member in members]
+                ).strip(),
             },
         )
     return payload
 
 
-def materialize_canonical_unresolved(groups: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def materialize_canonical_unresolved(
+    groups: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for canonical_id, members in sorted(groups.items()):
-        canonical_question = Counter(member["canonical_question"] for member in members).most_common(1)[0][0]
-        why_unresolved = Counter(member.get("why_unresolved") or "" for member in members if member.get("why_unresolved")).most_common(1)
+        canonical_question = Counter(
+            member["canonical_question"] for member in members
+        ).most_common(1)[0][0]
+        why_unresolved = Counter(
+            member.get("why_unresolved") or "" for member in members if member.get("why_unresolved")
+        ).most_common(1)
         payload.append(
             {
                 "federated_question_id": canonical_id,
@@ -574,8 +685,12 @@ def materialize_canonical_unresolved(groups: dict[str, list[dict[str, Any]]]) ->
                 "corpus_ids": sorted({member["corpus_id"] for member in members}),
                 "member_count": len(members),
                 "member_questions": members,
-                "vector_terms": aggregate_vector_terms([member.get("search_text") or "" for member in members]),
-                "search_text": " ".join([canonical_question] + [member.get("search_text") or "" for member in members]).strip(),
+                "vector_terms": aggregate_vector_terms(
+                    [member.get("search_text") or "" for member in members]
+                ),
+                "search_text": " ".join(
+                    [canonical_question] + [member.get("search_text") or "" for member in members]
+                ).strip(),
             },
         )
     return payload
@@ -600,7 +715,9 @@ def materialize_doctrine_briefs(canonical_families: list[dict[str, Any]]) -> lis
                 "stable_themes": item.get("stable_themes") or [],
                 "key_entities": item.get("key_entities") or [],
                 "brief_text": brief,
-                "search_text": " ".join([item["canonical_title"], themes, corpora, item.get("search_text") or ""]).strip(),
+                "search_text": " ".join(
+                    [item["canonical_title"], themes, corpora, item.get("search_text") or ""]
+                ).strip(),
                 "vector_terms": item.get("vector_terms") or {},
             },
         )
@@ -625,7 +742,9 @@ def materialize_entity_dossiers(canonical_entities: list[dict[str, Any]]) -> lis
                 "aliases": item.get("aliases") or [],
                 "member_count": item.get("member_count", 0),
                 "dossier_text": dossier,
-                "search_text": " ".join([item["canonical_label"], aliases, corpora, item.get("search_text") or ""]).strip(),
+                "search_text": " ".join(
+                    [item["canonical_label"], aliases, corpora, item.get("search_text") or ""]
+                ).strip(),
                 "vector_terms": item.get("vector_terms") or {},
             },
         )
@@ -648,7 +767,9 @@ def materialize_project_dossiers(canonical_families: list[dict[str, Any]]) -> li
                 "corpus_ids": item.get("corpus_ids") or [],
                 "stable_themes": item.get("stable_themes") or [],
                 "project_text": project_text,
-                "search_text": " ".join([item["canonical_title"], project_text, item.get("search_text") or ""]).strip(),
+                "search_text": " ".join(
+                    [item["canonical_title"], project_text, item.get("search_text") or ""]
+                ).strip(),
                 "vector_terms": item.get("vector_terms") or {},
             },
         )
@@ -721,7 +842,11 @@ def render_overlap_report(
         "## Open Review Types",
         "",
     ]
-    counter = Counter(item.get("review_type") or "unknown" for item in review_queue.get("items", []) if item.get("status") == "open")
+    counter = Counter(
+        item.get("review_type") or "unknown"
+        for item in review_queue.get("items", [])
+        if item.get("status") == "open"
+    )
     if not counter:
         lines.append("No open federated review items.")
     else:
@@ -779,10 +904,34 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
     action_records = collect_action_records(surfaces)
     unresolved_records = collect_unresolved_records(surfaces)
 
-    entity_suggestions = build_pair_suggestions(entity_records, review_type="entity-alias", similarity_fn=entity_similarity, threshold=0.7, decisions=decisions)
-    family_suggestions = build_pair_suggestions(family_records, review_type="family-merge", similarity_fn=family_similarity, threshold=0.65, decisions=decisions)
-    action_suggestions = build_pair_suggestions(action_records, review_type="action-merge", similarity_fn=action_similarity, threshold=0.78, decisions=decisions)
-    unresolved_suggestions = build_pair_suggestions(unresolved_records, review_type="unresolved-merge", similarity_fn=unresolved_similarity, threshold=0.78, decisions=decisions)
+    entity_suggestions = build_pair_suggestions(
+        entity_records,
+        review_type="entity-alias",
+        similarity_fn=entity_similarity,
+        threshold=0.7,
+        decisions=decisions,
+    )
+    family_suggestions = build_pair_suggestions(
+        family_records,
+        review_type="family-merge",
+        similarity_fn=family_similarity,
+        threshold=0.65,
+        decisions=decisions,
+    )
+    action_suggestions = build_pair_suggestions(
+        action_records,
+        review_type="action-merge",
+        similarity_fn=action_similarity,
+        threshold=0.78,
+        decisions=decisions,
+    )
+    unresolved_suggestions = build_pair_suggestions(
+        unresolved_records,
+        review_type="unresolved-merge",
+        similarity_fn=unresolved_similarity,
+        threshold=0.78,
+        decisions=decisions,
+    )
     contradiction_suggestions = build_pair_suggestions(
         family_records,
         review_type="contradiction",
@@ -792,7 +941,13 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
         contradiction_mode=True,
     )
 
-    queue_items = entity_suggestions + family_suggestions + action_suggestions + unresolved_suggestions + contradiction_suggestions
+    queue_items = (
+        entity_suggestions
+        + family_suggestions
+        + action_suggestions
+        + unresolved_suggestions
+        + contradiction_suggestions
+    )
     existing_queue = load_federated_review_queue(project_root)
     prior_status = {item.get("review_id"): item for item in existing_queue.get("items", [])}
     for item in queue_items:
@@ -804,8 +959,10 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
             item["resolved_at"] = previous.get("resolved_at")
             item["updated_at"] = previous.get("updated_at") or item["updated_at"]
     stale_resolved = [
-        item for item in existing_queue.get("items", [])
-        if item.get("review_id") not in {candidate["review_id"] for candidate in queue_items} and item.get("status") != "open"
+        item
+        for item in existing_queue.get("items", [])
+        if item.get("review_id") not in {candidate["review_id"] for candidate in queue_items}
+        and item.get("status") != "open"
     ]
     queue_payload = {
         "generated_at": now_iso(),
@@ -815,10 +972,18 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
     save_federated_review_queue(project_root, queue_payload)
     save_federated_decisions(project_root, decisions)
 
-    entity_groups = apply_decision_groups(entity_records, decisions, "accepted_entity_aliases", "federated-entity")
-    family_groups = apply_decision_groups(family_records, decisions, "accepted_family_merges", "federated-family")
-    action_groups = apply_decision_groups(action_records, decisions, "accepted_action_merges", "federated-action")
-    unresolved_groups = apply_decision_groups(unresolved_records, decisions, "accepted_unresolved_merges", "federated-question")
+    entity_groups = apply_decision_groups(
+        entity_records, decisions, "accepted_entity_aliases", "federated-entity"
+    )
+    family_groups = apply_decision_groups(
+        family_records, decisions, "accepted_family_merges", "federated-family"
+    )
+    action_groups = apply_decision_groups(
+        action_records, decisions, "accepted_action_merges", "federated-action"
+    )
+    unresolved_groups = apply_decision_groups(
+        unresolved_records, decisions, "accepted_unresolved_merges", "federated-question"
+    )
 
     canonical_entities = materialize_canonical_entities(entity_groups)
     canonical_families = materialize_canonical_families(family_groups)

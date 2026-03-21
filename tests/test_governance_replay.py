@@ -67,8 +67,18 @@ class GovernanceReplayTests(unittest.TestCase):
             warn_root = workspace_root / "gemini-history-memory"
             seed_valid_corpus(pass_root, name="Claude Local Session Memory", gate_state="pass")
             seed_valid_corpus(warn_root, name="Gemini History Memory", gate_state="warn")
-            upsert_corpus(project_root, pass_root, corpus_id="claude-local-session-memory", name="Claude Local Session Memory")
-            upsert_corpus(project_root, warn_root, corpus_id="gemini-history-memory", name="Gemini History Memory")
+            upsert_corpus(
+                project_root,
+                pass_root,
+                corpus_id="claude-local-session-memory",
+                name="Claude Local Session Memory",
+            )
+            upsert_corpus(
+                project_root,
+                warn_root,
+                corpus_id="gemini-history-memory",
+                name="Gemini History Memory",
+            )
 
             default_payload = build_policy_replay_payload(project_root)
             override_payload = build_policy_replay_payload(
@@ -117,8 +127,12 @@ class GovernanceReplayTests(unittest.TestCase):
                 threshold_overrides={"max_stale_corpora": 1.0},
             )
             artifacts = write_policy_replay_artifacts(project_root, payload)
-            history = json.loads(policy_replay_history_path(project_root).read_text(encoding="utf-8"))
-            calibration = json.loads(policy_calibration_path(project_root).read_text(encoding="utf-8"))
+            history = json.loads(
+                policy_replay_history_path(project_root).read_text(encoding="utf-8")
+            )
+            calibration = json.loads(
+                policy_calibration_path(project_root).read_text(encoding="utf-8")
+            )
 
             self.assertEqual(payload["summary"]["stale_corpus_count"], 1)
             self.assertEqual(payload["cases"][0]["source_freshness_state"], "missing_snapshot")

@@ -23,15 +23,32 @@ def seed_eval_target(root: Path, *, corpus_id: str, name: str, adapter_type: str
     family_id = f"{corpus_id}-family-001"
     pair_id = f"{thread_uid}-pair-001"
     (corpus / "threads-index.json").write_text(
-        json.dumps([{"thread_uid": thread_uid, "title_normalized": name, "family_ids": [family_id]}]),
+        json.dumps(
+            [{"thread_uid": thread_uid, "title_normalized": name, "family_ids": [family_id]}]
+        ),
         encoding="utf-8",
     )
     (corpus / "semantic-v3-index.json").write_text(
-        json.dumps({"threads": [{"thread_uid": thread_uid, "search_text": name, "family_ids": [family_id]}]}),
+        json.dumps(
+            {
+                "threads": [
+                    {"thread_uid": thread_uid, "search_text": name, "family_ids": [family_id]}
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     (corpus / "pairs-index.json").write_text(
-        json.dumps([{"pair_id": pair_id, "thread_uid": thread_uid, "family_ids": [family_id], "search_text": name}]),
+        json.dumps(
+            [
+                {
+                    "pair_id": pair_id,
+                    "thread_uid": thread_uid,
+                    "family_ids": [family_id],
+                    "search_text": name,
+                }
+            ]
+        ),
         encoding="utf-8",
     )
     (corpus / "doctrine-briefs.json").write_text(
@@ -119,7 +136,9 @@ class EvaluationBootstrapTests(unittest.TestCase):
             self.assertEqual(payload["target_root"], str(target_root.resolve()))
             self.assertTrue((target_root / "eval" / "gold" / "manual" / "detectors.json").exists())
             self.assertTrue((target_root / "eval" / "manual-review-guide.md").exists())
-            self.assertTrue((project_root / "reports" / "gemini-evaluation-bootstrap-latest.md").exists())
+            self.assertTrue(
+                (project_root / "reports" / "gemini-evaluation-bootstrap-latest.md").exists()
+            )
 
     def test_bootstrap_claude_uses_policy_primary_root_and_can_run_full_eval(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -153,11 +172,17 @@ class EvaluationBootstrapTests(unittest.TestCase):
             self.assertEqual(payload["target_root"], str(target_root.resolve()))
             self.assertTrue((target_root / "eval" / "gold" / "manual" / "detectors.json").exists())
             self.assertTrue((target_root / "eval" / "gold" / "manual" / "families.json").exists())
-            self.assertTrue((target_root / "eval" / "fixtures" / "manual" / "retrieval.json").exists())
+            self.assertTrue(
+                (target_root / "eval" / "fixtures" / "manual" / "retrieval.json").exists()
+            )
             self.assertTrue((target_root / "eval" / "gold" / "manual" / "answers.json").exists())
             self.assertTrue((target_root / "eval" / "manual-review-guide.md").exists())
-            self.assertTrue((project_root / "reports" / "claude-evaluation-bootstrap-latest.md").exists())
-            self.assertTrue(any(path.endswith("evaluation-latest.json") for path in payload["outputs"].values()))
+            self.assertTrue(
+                (project_root / "reports" / "claude-evaluation-bootstrap-latest.md").exists()
+            )
+            self.assertTrue(
+                any(path.endswith("evaluation-latest.json") for path in payload["outputs"].values())
+            )
 
 
 if __name__ == "__main__":

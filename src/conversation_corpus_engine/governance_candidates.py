@@ -86,7 +86,9 @@ def append_history(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def build_policy_candidate_diff(live_policy: dict[str, Any], threshold_overrides: dict[str, float]) -> dict[str, Any]:
+def build_policy_candidate_diff(
+    live_policy: dict[str, Any], threshold_overrides: dict[str, float]
+) -> dict[str, Any]:
     current_thresholds = dict((live_policy.get("thresholds") or {}))
     proposed_thresholds = dict(current_thresholds)
     changed_thresholds: list[dict[str, Any]] = []
@@ -211,7 +213,10 @@ def stage_policy_candidate(
     write_json(candidate_dir / "replay.json", replay_payload)
     write_markdown(candidate_dir / "memo.md", render_policy_candidate(manifest))
     write_json(policy_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(policy_candidate_latest_markdown_path(resolved_project_root), render_policy_candidate(manifest))
+    write_markdown(
+        policy_candidate_latest_markdown_path(resolved_project_root),
+        render_policy_candidate(manifest),
+    )
     append_history(
         policy_candidate_history_path(resolved_project_root),
         {
@@ -227,17 +232,24 @@ def stage_policy_candidate(
     return manifest
 
 
-def load_policy_candidate_manifest(project_root: Path, candidate_id: str = "latest") -> dict[str, Any]:
+def load_policy_candidate_manifest(
+    project_root: Path, candidate_id: str = "latest"
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     if candidate_id == "latest":
-        payload = load_json(policy_candidate_latest_json_path(resolved_project_root), default={}) or {}
+        payload = (
+            load_json(policy_candidate_latest_json_path(resolved_project_root), default={}) or {}
+        )
         if payload:
             return payload
         raise ValueError("No staged policy candidate is available.")
-    payload = load_json(
-        policy_candidates_dir(resolved_project_root) / candidate_id / "manifest.json",
-        default={},
-    ) or {}
+    payload = (
+        load_json(
+            policy_candidates_dir(resolved_project_root) / candidate_id / "manifest.json",
+            default={},
+        )
+        or {}
+    )
     if not payload:
         raise ValueError(f"No staged policy candidate exists for id: {candidate_id}")
     return payload
@@ -265,7 +277,10 @@ def review_policy_candidate(
         manifest,
     )
     write_json(policy_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(policy_candidate_latest_markdown_path(resolved_project_root), render_policy_candidate(manifest))
+    write_markdown(
+        policy_candidate_latest_markdown_path(resolved_project_root),
+        render_policy_candidate(manifest),
+    )
     append_history(
         policy_review_history_path(resolved_project_root),
         {
@@ -279,11 +294,15 @@ def review_policy_candidate(
     return manifest
 
 
-def apply_policy_candidate(project_root: Path, candidate_id: str, *, note: str = "") -> dict[str, Any]:
+def apply_policy_candidate(
+    project_root: Path, candidate_id: str, *, note: str = ""
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     manifest = load_policy_candidate_manifest(resolved_project_root, candidate_id=candidate_id)
     if manifest.get("status") != "approved":
-        raise ValueError(f"Policy candidate {candidate_id} must be approved before it can be applied.")
+        raise ValueError(
+            f"Policy candidate {candidate_id} must be approved before it can be applied."
+        )
 
     live_policy = load_or_create_promotion_policy(resolved_project_root)
     threshold_overrides = dict(manifest.get("threshold_overrides") or {})
@@ -321,7 +340,10 @@ def apply_policy_candidate(project_root: Path, candidate_id: str, *, note: str =
         manifest,
     )
     write_json(policy_candidate_latest_json_path(resolved_project_root), manifest)
-    write_markdown(policy_candidate_latest_markdown_path(resolved_project_root), render_policy_candidate(manifest))
+    write_markdown(
+        policy_candidate_latest_markdown_path(resolved_project_root),
+        render_policy_candidate(manifest),
+    )
 
     diff_payload = {
         "candidate_id": manifest["candidate_id"],
@@ -329,7 +351,9 @@ def apply_policy_candidate(project_root: Path, candidate_id: str, *, note: str =
         **diff,
     }
     write_json(policy_diff_latest_json_path(resolved_project_root), diff_payload)
-    write_markdown(policy_diff_latest_markdown_path(resolved_project_root), render_policy_diff(diff_payload))
+    write_markdown(
+        policy_diff_latest_markdown_path(resolved_project_root), render_policy_diff(diff_payload)
+    )
 
     payload = {
         "candidate_id": manifest["candidate_id"],
@@ -341,7 +365,10 @@ def apply_policy_candidate(project_root: Path, candidate_id: str, *, note: str =
         "policy_calibration_path": str(policy_calibration_path(resolved_project_root)),
     }
     write_json(policy_application_latest_json_path(resolved_project_root), payload)
-    write_markdown(policy_application_latest_markdown_path(resolved_project_root), render_policy_application(payload))
+    write_markdown(
+        policy_application_latest_markdown_path(resolved_project_root),
+        render_policy_application(payload),
+    )
     append_history(
         policy_application_history_path(resolved_project_root),
         {
@@ -357,7 +384,9 @@ def apply_policy_candidate(project_root: Path, candidate_id: str, *, note: str =
     return payload
 
 
-def rollback_policy_application(project_root: Path, *, target: str = "previous", note: str = "") -> dict[str, Any]:
+def rollback_policy_application(
+    project_root: Path, *, target: str = "previous", note: str = ""
+) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     history = load_json(
         policy_application_history_path(resolved_project_root),

@@ -20,7 +20,11 @@ def summarize_provider(provider: str, source_drop_root: Path) -> dict[str, Any]:
     config = get_provider_config(provider)
     inbox_root = (source_drop_root / config["inbox_rel"]).resolve()
     entries = visible_entries(inbox_root)
-    detector = looks_like_claude_bundle if config["discovery_mode"] == "claude-bundle" else path_has_supported_export_content
+    detector = (
+        looks_like_claude_bundle
+        if config["discovery_mode"] == "claude-bundle"
+        else path_has_supported_export_content
+    )
     detected_source_path = None
     upload_state = "empty"
     local_source_root = config.get("local_source_root")
@@ -69,8 +73,12 @@ def discover_provider_uploads(project_root: Path, source_drop_root: Path) -> dic
             "providers": len(providers),
             "supported": sum(1 for item in providers if item["adapter_state"] == "supported"),
             "ready_uploads": sum(1 for item in providers if item["upload_state"] == "ready"),
-            "present_unresolved": sum(1 for item in providers if item["upload_state"] == "present-unresolved"),
-            "multiple_ready": sum(1 for item in providers if item["upload_state"] == "multiple-ready"),
+            "present_unresolved": sum(
+                1 for item in providers if item["upload_state"] == "present-unresolved"
+            ),
+            "multiple_ready": sum(
+                1 for item in providers if item["upload_state"] == "multiple-ready"
+            ),
         },
         "providers": providers,
     }
@@ -84,12 +92,16 @@ def render_provider_discovery_text(payload: dict[str, Any]) -> str:
         "",
     ]
     for item in payload["providers"]:
-        lines.append(f"{item['provider']}  adapter={item['adapter_state']}  upload_state={item['upload_state']}")
+        lines.append(
+            f"{item['provider']}  adapter={item['adapter_state']}  upload_state={item['upload_state']}"
+        )
         lines.append(f"  inbox: {item['inbox_root']}")
         if item.get("detected_source_path"):
             lines.append(f"  detected_source: {item['detected_source_path']}")
         if item.get("local_source_root"):
-            lines.append(f"  local_source: {item['local_source_root']} ({item.get('local_source_state')})")
+            lines.append(
+                f"  local_source: {item['local_source_root']} ({item.get('local_source_state')})"
+            )
         if item.get("visible_entries"):
             lines.append(f"  entries: {', '.join(item['visible_entries'])}")
         lines.append("")

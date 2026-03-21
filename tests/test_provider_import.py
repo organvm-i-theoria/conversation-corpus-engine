@@ -36,9 +36,13 @@ class ProviderImportTests(unittest.TestCase):
 
             registry = list_registered_corpora(project_root)
             readiness = build_provider_readiness(project_root, source_drop_root)
-            perplexity = next(item for item in readiness["providers"] if item["provider"] == "perplexity")
+            perplexity = next(
+                item for item in readiness["providers"] if item["provider"] == "perplexity"
+            )
             contract = json.loads(
-                (Path(result["output_root"]) / "corpus" / "contract.json").read_text(encoding="utf-8"),
+                (Path(result["output_root"]) / "corpus" / "contract.json").read_text(
+                    encoding="utf-8"
+                ),
             )
 
             self.assertEqual(result["corpus_id"], "perplexity-history-memory")

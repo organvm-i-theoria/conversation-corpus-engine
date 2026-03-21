@@ -59,7 +59,9 @@ def transcript_attachment_roots(source_input: Path) -> list[Path]:
     return roots
 
 
-def collect_source_files(source_input: Path, adapter_type: str, collection_scope: str | None) -> list[Path]:
+def collect_source_files(
+    source_input: Path, adapter_type: str, collection_scope: str | None
+) -> list[Path]:
     source_input = source_input.resolve()
     if not source_input.exists():
         return []
@@ -115,7 +117,9 @@ def collect_source_files(source_input: Path, adapter_type: str, collection_scope
     return [deduped[key] for key in sorted(deduped)]
 
 
-def build_source_signature(source_input: Path, adapter_type: str, collection_scope: str | None) -> dict[str, Any]:
+def build_source_signature(
+    source_input: Path, adapter_type: str, collection_scope: str | None
+) -> dict[str, Any]:
     source_input = source_input.resolve()
     if adapter_type not in SUPPORTED_SOURCE_ADAPTERS:
         return {
@@ -167,7 +171,9 @@ def build_source_signature(source_input: Path, adapter_type: str, collection_sco
     signature_input = "||".join(
         f"{entry['relative_path']}:{entry['size']}:{entry['mtime_ns']}" for entry in file_entries
     )
-    signature_fingerprint = hashlib.sha256(signature_input.encode("utf-8")).hexdigest()[:24] if file_entries else ""
+    signature_fingerprint = (
+        hashlib.sha256(signature_input.encode("utf-8")).hexdigest()[:24] if file_entries else ""
+    )
     return {
         "captured_at": now_iso(),
         "source_input": str(source_input),
@@ -184,7 +190,9 @@ def build_source_signature(source_input: Path, adapter_type: str, collection_sco
     }
 
 
-def build_source_snapshot(source_input: Path, adapter_type: str, collection_scope: str | None) -> dict[str, Any]:
+def build_source_snapshot(
+    source_input: Path, adapter_type: str, collection_scope: str | None
+) -> dict[str, Any]:
     signature = build_source_signature(source_input, adapter_type, collection_scope)
     snapshot = dict(signature)
     files = snapshot.get("files") or []
@@ -199,9 +207,14 @@ def build_source_snapshot(source_input: Path, adapter_type: str, collection_scop
         path = root_base / entry["relative_path"]
         content_entries.append({**entry, "sha256": file_sha256(path)})
     fingerprint_input = "||".join(
-        f"{entry['relative_path']}:{entry['size']}:{entry['mtime_ns']}:{entry['sha256']}" for entry in content_entries
+        f"{entry['relative_path']}:{entry['size']}:{entry['mtime_ns']}:{entry['sha256']}"
+        for entry in content_entries
     )
-    content_fingerprint = hashlib.sha256(fingerprint_input.encode("utf-8")).hexdigest()[:24] if content_entries else ""
+    content_fingerprint = (
+        hashlib.sha256(fingerprint_input.encode("utf-8")).hexdigest()[:24]
+        if content_entries
+        else ""
+    )
     snapshot["files"] = content_entries
     snapshot["content_fingerprint"] = content_fingerprint
     snapshot["fingerprint"] = content_fingerprint
@@ -239,7 +252,8 @@ def compute_source_freshness(corpus_root: Path) -> dict[str, Any]:
             "source_input": str(source_input),
             "adapter_type": adapter_type,
             "collection_scope": collection_scope,
-            "stored_signature_fingerprint": stored_snapshot.get("signature_fingerprint") or contract.get("source_signature_fingerprint"),
+            "stored_signature_fingerprint": stored_snapshot.get("signature_fingerprint")
+            or contract.get("source_signature_fingerprint"),
             "current_signature_fingerprint": "",
             "note": "The recorded source input does not currently exist.",
         }
@@ -257,7 +271,11 @@ def compute_source_freshness(corpus_root: Path) -> dict[str, Any]:
             "note": "The corpus has no recorded source snapshot and should be refreshed once.",
         }
 
-    stored_signature = stored_snapshot.get("signature_fingerprint") or contract.get("source_signature_fingerprint") or ""
+    stored_signature = (
+        stored_snapshot.get("signature_fingerprint")
+        or contract.get("source_signature_fingerprint")
+        or ""
+    )
     current_fingerprint = current_signature.get("signature_fingerprint") or ""
     if stored_signature == current_fingerprint:
         return {

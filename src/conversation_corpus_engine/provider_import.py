@@ -48,10 +48,15 @@ def resolve_provider_import_source(
         resolved_local_root = (local_root or DEFAULT_CLAUDE_LOCAL_ROOT).resolve()
         return resolved_local_root, {"resolution": "local-session-root"}
 
-    resolved_source_drop_root = (source_drop_root or default_source_drop_root(project_root)).resolve()
+    resolved_source_drop_root = (
+        source_drop_root or default_source_drop_root(project_root)
+    ).resolve()
     inbox_root = resolved_source_drop_root / provider / "inbox"
     if provider == "claude":
-        return resolve_claude_source_path(inbox_root), {"resolution": "provider-inbox", "inbox_root": str(inbox_root)}
+        return resolve_claude_source_path(inbox_root), {
+            "resolution": "provider-inbox",
+            "inbox_root": str(inbox_root),
+        }
     return resolve_document_export_source_path(inbox_root, provider=provider), {
         "resolution": "provider-inbox",
         "inbox_root": str(inbox_root),
@@ -69,8 +74,12 @@ def default_output_root(
     if provider == "claude" and mode == "local-session":
         corpus_id = config["default_corpus_id"]
     else:
-        corpus_id = config["default_corpus_id"] if provider != "claude" else config["fallback_corpus_id"]
-    resolved_source_drop_root = (source_drop_root or default_source_drop_root(project_root)).resolve()
+        corpus_id = (
+            config["default_corpus_id"] if provider != "claude" else config["fallback_corpus_id"]
+        )
+    resolved_source_drop_root = (
+        source_drop_root or default_source_drop_root(project_root)
+    ).resolve()
     return conventional_corpus_root(resolved_source_drop_root, corpus_id)
 
 
@@ -98,12 +107,15 @@ def import_provider_corpus(
         source_path=source_path,
         local_root=local_root,
     )
-    resolved_output_root = (output_root or default_output_root(
-        provider=provider,
-        mode=mode,
-        project_root=project_root,
-        source_drop_root=source_drop_root,
-    )).resolve()
+    resolved_output_root = (
+        output_root
+        or default_output_root(
+            provider=provider,
+            mode=mode,
+            project_root=project_root,
+            source_drop_root=source_drop_root,
+        )
+    ).resolve()
     resolved_corpus_id = corpus_id
     resolved_name = name
 

@@ -320,11 +320,21 @@ def build_surface_manifest(
             "registry_path": str(registry_path(resolved_project_root)),
             "promotion_policy_path": str(promotion_policy_path(resolved_project_root)),
             "federation_summary_path": str(federation_report_path(resolved_project_root)),
-            "policy_replay_latest_json_path": str(policy_replay_latest_json_path(resolved_project_root)),
-            "policy_candidate_latest_json_path": str(policy_candidate_latest_json_path(resolved_project_root)),
-            "policy_application_latest_json_path": str(policy_application_latest_json_path(resolved_project_root)),
-            "corpus_candidate_latest_json_path": str(corpus_candidate_latest_json_path(resolved_project_root)),
-            "corpus_promotion_latest_json_path": str(corpus_promotion_latest_json_path(resolved_project_root)),
+            "policy_replay_latest_json_path": str(
+                policy_replay_latest_json_path(resolved_project_root)
+            ),
+            "policy_candidate_latest_json_path": str(
+                policy_candidate_latest_json_path(resolved_project_root)
+            ),
+            "policy_application_latest_json_path": str(
+                policy_application_latest_json_path(resolved_project_root)
+            ),
+            "corpus_candidate_latest_json_path": str(
+                corpus_candidate_latest_json_path(resolved_project_root)
+            ),
+            "corpus_promotion_latest_json_path": str(
+                corpus_promotion_latest_json_path(resolved_project_root)
+            ),
             "corpus_live_pointer_path": str(corpus_live_pointer_path(resolved_project_root)),
             "source_policy_paths": {
                 provider: str(source_policy_path(resolved_project_root, provider))
@@ -362,9 +372,7 @@ def build_mcp_context_payload(
         1 for item in providers if item.get("overall_state") == "healthy-federation"
     )
     refresh_recommended_count = sum(
-        1
-        for item in providers
-        if "cce provider refresh" in (item.get("next_command") or "")
+        1 for item in providers if "cce provider refresh" in (item.get("next_command") or "")
     )
     return {
         "contract_name": MCP_CONTEXT_CONTRACT,
@@ -387,15 +395,29 @@ def build_mcp_context_payload(
         "providers": providers,
         "governance": {
             "promotion_policy": load_or_create_promotion_policy(resolved_project_root),
-            "latest_policy_replay": optional_json(policy_replay_latest_json_path(resolved_project_root)),
-            "latest_policy_candidate": optional_json(policy_candidate_latest_json_path(resolved_project_root)),
-            "latest_policy_application": optional_json(policy_application_latest_json_path(resolved_project_root)),
-            "latest_corpus_candidate": optional_json(corpus_candidate_latest_json_path(resolved_project_root)),
-            "latest_corpus_promotion": optional_json(corpus_promotion_latest_json_path(resolved_project_root)),
+            "latest_policy_replay": optional_json(
+                policy_replay_latest_json_path(resolved_project_root)
+            ),
+            "latest_policy_candidate": optional_json(
+                policy_candidate_latest_json_path(resolved_project_root)
+            ),
+            "latest_policy_application": optional_json(
+                policy_application_latest_json_path(resolved_project_root)
+            ),
+            "latest_corpus_candidate": optional_json(
+                corpus_candidate_latest_json_path(resolved_project_root)
+            ),
+            "latest_corpus_promotion": optional_json(
+                corpus_promotion_latest_json_path(resolved_project_root)
+            ),
         },
         "latest_events": {
-            "latest_corpus_live_pointer": optional_json(corpus_live_pointer_path(resolved_project_root)),
-            "latest_policy_live_pointer": optional_json(policy_live_pointer_path(resolved_project_root)),
+            "latest_corpus_live_pointer": optional_json(
+                corpus_live_pointer_path(resolved_project_root)
+            ),
+            "latest_policy_live_pointer": optional_json(
+                policy_live_pointer_path(resolved_project_root)
+            ),
             "latest_provider_refreshes": latest_provider_refreshes(resolved_project_root),
         },
         "review_queue": {
@@ -492,5 +514,7 @@ def export_surface_bundle(
     bundle_validation = validate_payload("surface-bundle", bundle)
     bundle["bundle_validation"] = bundle_validation
     write_json(surface_bundle_json_path(resolved_project_root), bundle)
-    write_markdown(surface_bundle_markdown_path(resolved_project_root), render_surface_bundle(bundle))
+    write_markdown(
+        surface_bundle_markdown_path(resolved_project_root), render_surface_bundle(bundle)
+    )
     return bundle

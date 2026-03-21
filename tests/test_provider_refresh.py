@@ -13,7 +13,9 @@ from conversation_corpus_engine.provider_refresh import refresh_provider_corpus
 from conversation_corpus_engine.source_policy import load_source_policy, set_source_policy
 
 
-def seed_valid_corpus(root: Path, *, adapter_type: str = "perplexity-export", gate_state: str = "pass") -> None:
+def seed_valid_corpus(
+    root: Path, *, adapter_type: str = "perplexity-export", gate_state: str = "pass"
+) -> None:
     corpus_dir = root / "corpus"
     corpus_dir.mkdir(parents=True, exist_ok=True)
     (root / "eval").mkdir(parents=True, exist_ok=True)

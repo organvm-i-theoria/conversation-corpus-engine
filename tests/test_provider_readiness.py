@@ -13,7 +13,9 @@ from conversation_corpus_engine.provider_discovery import discover_provider_uplo
 from conversation_corpus_engine.provider_readiness import build_provider_readiness
 
 
-def seed_valid_corpus(root: Path, *, adapter_type: str = "perplexity-export", gate_state: str = "pass") -> None:
+def seed_valid_corpus(
+    root: Path, *, adapter_type: str = "perplexity-export", gate_state: str = "pass"
+) -> None:
     corpus_dir = root / "corpus"
     corpus_dir.mkdir(parents=True, exist_ok=True)
     (root / "eval").mkdir(parents=True, exist_ok=True)
@@ -61,7 +63,9 @@ class ProviderReadinessTests(unittest.TestCase):
             (inbox / "export.md").write_text("# export\n", encoding="utf-8")
 
             payload = discover_provider_uploads(project_root, source_drop_root)
-            perplexity = next(item for item in payload["providers"] if item["provider"] == "perplexity")
+            perplexity = next(
+                item for item in payload["providers"] if item["provider"] == "perplexity"
+            )
 
             self.assertEqual(perplexity["upload_state"], "ready")
             self.assertEqual(perplexity["detected_source_path"], str(inbox.resolve()))
@@ -84,7 +88,9 @@ class ProviderReadinessTests(unittest.TestCase):
             )
 
             payload = build_provider_readiness(project_root, source_drop_root)
-            readiness = next(item for item in payload["providers"] if item["provider"] == "perplexity")
+            readiness = next(
+                item for item in payload["providers"] if item["provider"] == "perplexity"
+            )
             corpora = list_registered_corpora(project_root)
 
             self.assertEqual(readiness["overall_state"], "healthy-federation")

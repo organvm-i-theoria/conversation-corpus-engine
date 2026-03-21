@@ -28,7 +28,9 @@ def candidate_entry_for_root(
     }
 
 
-def collection_map(items: list[dict[str, Any]], *, key_field: str, label_field: str) -> dict[str, str]:
+def collection_map(
+    items: list[dict[str, Any]], *, key_field: str, label_field: str
+) -> dict[str, str]:
     values: dict[str, str] = {}
     for item in items:
         key = str(item.get(key_field) or item.get(label_field) or "").strip()
@@ -101,7 +103,9 @@ def candidate_queries(surface: dict[str, Any]) -> list[str]:
     return [item for item in unique_preserve(queries) if item]
 
 
-def representative_queries(live_surface: dict[str, Any], candidate_surface: dict[str, Any], *, limit: int = 8) -> list[str]:
+def representative_queries(
+    live_surface: dict[str, Any], candidate_surface: dict[str, Any], *, limit: int = 8
+) -> list[str]:
     queries = candidate_queries(candidate_surface) + candidate_queries(live_surface)
     return unique_preserve(queries)[: max(limit, 1)]
 
@@ -109,10 +113,12 @@ def representative_queries(live_surface: dict[str, Any], candidate_surface: dict
 def summarize_query_result(root: Path, query: str) -> dict[str, Any]:
     retrieval = search_documents_v4(root, query, limit=6)
     answer = build_answer(query, retrieval)
-    top_hit = ((retrieval.get("hits") or [None])[0] or {})
+    top_hit = (retrieval.get("hits") or [None])[0] or {}
     return {
         "answer_state": answer.get("answer_state"),
-        "confidence": round(float(answer.get("confidence", 0.0)), 4) if answer.get("confidence") is not None else None,
+        "confidence": round(float(answer.get("confidence", 0.0)), 4)
+        if answer.get("confidence") is not None
+        else None,
         "state_reason": answer.get("state_reason"),
         "top_hit_kind": top_hit.get("kind"),
         "top_hit_title": top_hit.get("title"),
@@ -130,7 +136,8 @@ def compare_query_result(query: str, live_root: Path, candidate_root: Path) -> d
         if live_result.get(field) != candidate_result.get(field):
             changed_fields.append(field)
     confidence_delta = round(
-        float(candidate_result.get("confidence") or 0.0) - float(live_result.get("confidence") or 0.0),
+        float(candidate_result.get("confidence") or 0.0)
+        - float(live_result.get("confidence") or 0.0),
         4,
     )
     if confidence_delta != 0:
@@ -166,21 +173,53 @@ def build_corpus_diff_payload(
     candidate_validation = validate_corpus_root(resolved_candidate_root)
 
     family_delta = build_collection_delta(
-        collection_map(live_surface.get("families") or [], key_field="canonical_family_id", label_field="canonical_title"),
-        collection_map(candidate_surface.get("families") or [], key_field="canonical_family_id", label_field="canonical_title"),
+        collection_map(
+            live_surface.get("families") or [],
+            key_field="canonical_family_id",
+            label_field="canonical_title",
+        ),
+        collection_map(
+            candidate_surface.get("families") or [],
+            key_field="canonical_family_id",
+            label_field="canonical_title",
+        ),
         include_label_changes=True,
     )
     action_delta = build_collection_delta(
-        collection_map(live_surface.get("actions") or [], key_field="action_key", label_field="canonical_action"),
-        collection_map(candidate_surface.get("actions") or [], key_field="action_key", label_field="canonical_action"),
+        collection_map(
+            live_surface.get("actions") or [],
+            key_field="action_key",
+            label_field="canonical_action",
+        ),
+        collection_map(
+            candidate_surface.get("actions") or [],
+            key_field="action_key",
+            label_field="canonical_action",
+        ),
     )
     unresolved_delta = build_collection_delta(
-        collection_map(live_surface.get("unresolved") or [], key_field="question_key", label_field="canonical_question"),
-        collection_map(candidate_surface.get("unresolved") or [], key_field="question_key", label_field="canonical_question"),
+        collection_map(
+            live_surface.get("unresolved") or [],
+            key_field="question_key",
+            label_field="canonical_question",
+        ),
+        collection_map(
+            candidate_surface.get("unresolved") or [],
+            key_field="question_key",
+            label_field="canonical_question",
+        ),
     )
     entity_delta = build_collection_delta(
-        collection_map(live_surface.get("entities") or [], key_field="canonical_entity_id", label_field="canonical_label"),
-        collection_map(candidate_surface.get("entities") or [], key_field="canonical_entity_id", label_field="canonical_label"),
+        collection_map(
+            live_surface.get("entities") or [],
+            key_field="canonical_entity_id",
+            label_field="canonical_label",
+        ),
+        collection_map(
+            candidate_surface.get("entities") or [],
+            key_field="canonical_entity_id",
+            label_field="canonical_label",
+        ),
     )
 
     queries = representative_queries(live_surface, candidate_surface, limit=query_limit)
@@ -191,11 +230,16 @@ def build_corpus_diff_payload(
     changed_query_count = sum(1 for item in query_comparisons if item["changed"])
 
     summary = {
-        "thread_count_delta": candidate_summary.get("thread_count", 0) - live_summary.get("thread_count", 0),
-        "family_count_delta": candidate_summary.get("family_count", 0) - live_summary.get("family_count", 0),
-        "action_count_delta": candidate_summary.get("action_count", 0) - live_summary.get("action_count", 0),
-        "unresolved_count_delta": candidate_summary.get("unresolved_count", 0) - live_summary.get("unresolved_count", 0),
-        "entity_count_delta": candidate_summary.get("entity_count", 0) - live_summary.get("entity_count", 0),
+        "thread_count_delta": candidate_summary.get("thread_count", 0)
+        - live_summary.get("thread_count", 0),
+        "family_count_delta": candidate_summary.get("family_count", 0)
+        - live_summary.get("family_count", 0),
+        "action_count_delta": candidate_summary.get("action_count", 0)
+        - live_summary.get("action_count", 0),
+        "unresolved_count_delta": candidate_summary.get("unresolved_count", 0)
+        - live_summary.get("unresolved_count", 0),
+        "entity_count_delta": candidate_summary.get("entity_count", 0)
+        - live_summary.get("entity_count", 0),
         "added_family_count": family_delta["added_count"],
         "removed_family_count": family_delta["removed_count"],
         "changed_family_title_count": family_delta["label_change_count"],
@@ -235,7 +279,9 @@ def build_corpus_diff_payload(
         review_reasons.append("Canonical families, actions, unresolved items, or entities changed.")
     if changed_query_count > 0:
         review_reasons.append("Representative retrieval and answer behavior changed.")
-    if live_summary.get("evaluation_overall_state") != candidate_summary.get("evaluation_overall_state"):
+    if live_summary.get("evaluation_overall_state") != candidate_summary.get(
+        "evaluation_overall_state"
+    ):
         review_reasons.append("Candidate evaluation state differs from the live baseline.")
     if candidate_summary.get("source_freshness_state") not in {"fresh", "not_applicable"}:
         review_reasons.append("Candidate source freshness is not yet fresh.")

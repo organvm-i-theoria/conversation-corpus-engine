@@ -12,7 +12,9 @@ from conversation_corpus_engine.corpus_diff import build_corpus_diff_payload
 
 
 def token_map(*tokens: str) -> dict[str, float]:
-    return {token: round(1.0 - (index * 0.08), 4) for index, token in enumerate(tokens)}  # allow-secret
+    return {
+        token: round(1.0 - (index * 0.08), 4) for index, token in enumerate(tokens)  # allow-secret
+    }
 
 
 def seed_corpus(
@@ -107,7 +109,9 @@ def seed_corpus(
                     "doctrine_summary": f"{family_title} doctrine for {corpus_title}.",
                     "search_text": f"{family_title} {action_text}",
                     "actions": [{"action_key": action_key, "canonical_action": action_text}],
-                    "unresolved": [{"question_key": question_key, "canonical_question": question_text}],
+                    "unresolved": [
+                        {"question_key": question_key, "canonical_question": question_text}
+                    ],
                     "key_entities": [{"canonical_label": entity_label, "entity_type": "concept"}],
                     "vector_terms": vectors,
                 },

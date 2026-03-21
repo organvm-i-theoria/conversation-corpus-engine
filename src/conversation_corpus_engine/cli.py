@@ -92,25 +92,35 @@ def build_parser() -> argparse.ArgumentParser:
 
     migration = subparsers.add_parser("migration", help="Migration helpers")
     migration_sub = migration.add_subparsers(dest="action", required=True)
-    migration_seed = migration_sub.add_parser("seed-from-staging", help="Register corpora from a staging root")
+    migration_seed = migration_sub.add_parser(
+        "seed-from-staging", help="Register corpora from a staging root"
+    )
     migration_seed.add_argument("staging_root", type=Path)
     migration_seed.add_argument("--project-root", type=Path, default=default_project_root())
     migration_seed.add_argument("--prefer-default", default="chatgpt-history")
 
     provider = subparsers.add_parser("provider", help="Inspect provider intake and readiness")
     provider_sub = provider.add_subparsers(dest="action", required=True)
-    provider_discover = provider_sub.add_parser("discover", help="Inspect provider source-drop inboxes")
+    provider_discover = provider_sub.add_parser(
+        "discover", help="Inspect provider source-drop inboxes"
+    )
     provider_discover.add_argument("--project-root", type=Path, default=default_project_root())
     provider_discover.add_argument("--source-drop-root", type=Path)
     provider_discover.add_argument("--json", action="store_true")
-    provider_readiness = provider_sub.add_parser("readiness", help="Build provider readiness summary")
+    provider_readiness = provider_sub.add_parser(
+        "readiness", help="Build provider readiness summary"
+    )
     provider_readiness.add_argument("--project-root", type=Path, default=default_project_root())
     provider_readiness.add_argument("--source-drop-root", type=Path)
     provider_readiness.add_argument("--json", action="store_true")
     provider_readiness.add_argument("--write", action="store_true")
-    provider_import = provider_sub.add_parser("import", help="Import a provider source into a corpus")
+    provider_import = provider_sub.add_parser(
+        "import", help="Import a provider source into a corpus"
+    )
     provider_import.add_argument("--project-root", type=Path, default=default_project_root())
-    provider_import.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True)
+    provider_import.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+    )
     provider_import.add_argument("--mode", choices=["upload", "local-session"], default="upload")
     provider_import.add_argument("--source-drop-root", type=Path)
     provider_import.add_argument("--source-path", type=Path)
@@ -122,15 +132,23 @@ def build_parser() -> argparse.ArgumentParser:
     provider_import.add_argument("--build", action="store_true")
     provider_import.add_argument("--no-bootstrap-eval", action="store_true")
     provider_import.add_argument("--json", action="store_true")
-    provider_bootstrap = provider_sub.add_parser("bootstrap-eval", help="Scaffold manual evaluation files for a provider corpus")
-    provider_bootstrap.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True)
+    provider_bootstrap = provider_sub.add_parser(
+        "bootstrap-eval", help="Scaffold manual evaluation files for a provider corpus"
+    )
+    provider_bootstrap.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+    )
     provider_bootstrap.add_argument("--project-root", type=Path, default=default_project_root())
     provider_bootstrap.add_argument("--target-root", type=Path)
     provider_bootstrap.add_argument("--policy-path", type=Path)
     provider_bootstrap.add_argument("--full-eval", action="store_true")
     provider_bootstrap.add_argument("--json", action="store_true")
-    provider_refresh = provider_sub.add_parser("refresh", help="Import, evaluate, and stage a refreshed provider corpus")
-    provider_refresh.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True)
+    provider_refresh = provider_sub.add_parser(
+        "refresh", help="Import, evaluate, and stage a refreshed provider corpus"
+    )
+    provider_refresh.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+    )
     provider_refresh.add_argument("--project-root", type=Path, default=default_project_root())
     provider_refresh.add_argument("--mode", choices=["upload", "local-session"])
     provider_refresh.add_argument("--source-drop-root", type=Path)
@@ -152,32 +170,44 @@ def build_parser() -> argparse.ArgumentParser:
     schema_show = schema_sub.add_parser("show", help="Show a schema contract")
     schema_show.add_argument("schema_name", choices=sorted(SCHEMA_CATALOG))
     schema_show.add_argument("--json", action="store_true")
-    schema_validate = schema_sub.add_parser("validate", help="Validate a JSON artifact against a schema")
+    schema_validate = schema_sub.add_parser(
+        "validate", help="Validate a JSON artifact against a schema"
+    )
     schema_validate.add_argument("schema_name", choices=sorted(SCHEMA_CATALOG))
     schema_validate.add_argument("--path", type=Path, required=True)
     schema_validate.add_argument("--json", action="store_true")
 
     surface = subparsers.add_parser("surface", help="Export Meta/MCP-facing surface artifacts")
     surface_sub = surface.add_subparsers(dest="action", required=True)
-    surface_manifest = surface_sub.add_parser("manifest", help="Write the engine-facing surface manifest")
+    surface_manifest = surface_sub.add_parser(
+        "manifest", help="Write the engine-facing surface manifest"
+    )
     surface_manifest.add_argument("--project-root", type=Path, default=default_project_root())
     surface_manifest.add_argument("--source-drop-root", type=Path)
     surface_context = surface_sub.add_parser("context", help="Write the MCP-facing context payload")
     surface_context.add_argument("--project-root", type=Path, default=default_project_root())
     surface_context.add_argument("--source-drop-root", type=Path)
-    surface_bundle = surface_sub.add_parser("bundle", help="Write both exported surfaces and validation bundle")
+    surface_bundle = surface_sub.add_parser(
+        "bundle", help="Write both exported surfaces and validation bundle"
+    )
     surface_bundle.add_argument("--project-root", type=Path, default=default_project_root())
     surface_bundle.add_argument("--source-drop-root", type=Path)
 
-    source_policy = subparsers.add_parser("source-policy", help="Manage provider source authority policies")
+    source_policy = subparsers.add_parser(
+        "source-policy", help="Manage provider source authority policies"
+    )
     source_policy_sub = source_policy.add_subparsers(dest="action", required=True)
     source_policy_show = source_policy_sub.add_parser("show", help="Show a provider source policy")
     source_policy_show.add_argument("--project-root", type=Path, default=default_project_root())
-    source_policy_show.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True)
+    source_policy_show.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+    )
     source_policy_show.add_argument("--json", action="store_true")
     source_policy_set = source_policy_sub.add_parser("set", help="Set a provider source policy")
     source_policy_set.add_argument("--project-root", type=Path, default=default_project_root())
-    source_policy_set.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True)
+    source_policy_set.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+    )
     source_policy_set.add_argument("--primary-root", type=Path, required=True)
     source_policy_set.add_argument("--primary-corpus-id", required=True)
     source_policy_set.add_argument("--fallback-root", type=Path)
@@ -185,7 +215,9 @@ def build_parser() -> argparse.ArgumentParser:
     source_policy_set.add_argument("--decision", default="manual")
     source_policy_set.add_argument("--note", default="")
     source_policy_set.add_argument("--json", action="store_true")
-    source_policy_history = source_policy_sub.add_parser("history", help="Show source policy history")
+    source_policy_history = source_policy_sub.add_parser(
+        "history", help="Show source policy history"
+    )
     source_policy_history.add_argument("--project-root", type=Path, default=default_project_root())
     source_policy_history.add_argument("--json", action="store_true")
 
@@ -194,7 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     policy_show = policy_sub.add_parser("show", help="Show the live promotion policy")
     policy_show.add_argument("--project-root", type=Path, default=default_project_root())
     policy_show.add_argument("--json", action="store_true")
-    policy_replay = policy_sub.add_parser("replay", help="Replay the live or overridden policy against active corpora")
+    policy_replay = policy_sub.add_parser(
+        "replay", help="Replay the live or overridden policy against active corpora"
+    )
     policy_replay.add_argument("--project-root", type=Path, default=default_project_root())
     policy_replay.add_argument("--set-threshold", action="append", default=[])
     policy_replay.add_argument("--write", action="store_true")
@@ -230,11 +264,15 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_history = candidate_sub.add_parser("history", help="Show corpus candidate history")
     candidate_history.add_argument("--project-root", type=Path, default=default_project_root())
     candidate_history.add_argument("--json", action="store_true")
-    candidate_stage = candidate_sub.add_parser("stage", help="Stage a candidate corpus against the live baseline")
+    candidate_stage = candidate_sub.add_parser(
+        "stage", help="Stage a candidate corpus against the live baseline"
+    )
     candidate_stage.add_argument("--project-root", type=Path, default=default_project_root())
     candidate_stage.add_argument("--candidate-root", type=Path, required=True)
     candidate_stage.add_argument("--live-corpus-id")
-    candidate_stage.add_argument("--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"])
+    candidate_stage.add_argument(
+        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"]
+    )
     candidate_stage.add_argument("--note", default="")
     candidate_stage.add_argument("--json", action="store_true")
     candidate_review = candidate_sub.add_parser("review", help="Review a staged corpus candidate")
@@ -243,12 +281,16 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_review.add_argument("--decision", choices=["approve", "reject"], required=True)
     candidate_review.add_argument("--note", default="")
     candidate_review.add_argument("--json", action="store_true")
-    candidate_promote = candidate_sub.add_parser("promote", help="Promote an approved corpus candidate")
+    candidate_promote = candidate_sub.add_parser(
+        "promote", help="Promote an approved corpus candidate"
+    )
     candidate_promote.add_argument("--project-root", type=Path, default=default_project_root())
     candidate_promote.add_argument("--candidate-id", default="latest")
     candidate_promote.add_argument("--note", default="")
     candidate_promote.add_argument("--json", action="store_true")
-    candidate_rollback = candidate_sub.add_parser("rollback", help="Roll back the most recent corpus promotion")
+    candidate_rollback = candidate_sub.add_parser(
+        "rollback", help="Roll back the most recent corpus promotion"
+    )
     candidate_rollback.add_argument("--project-root", type=Path, default=default_project_root())
     candidate_rollback.add_argument("--target", default="previous")
     candidate_rollback.add_argument("--note", default="")
@@ -276,7 +318,9 @@ def build_parser() -> argparse.ArgumentParser:
     review_resolve = review_sub.add_parser("resolve", help="Resolve a federated review item")
     review_resolve.add_argument("review_id")
     review_resolve.add_argument("--project-root", type=Path, default=default_project_root())
-    review_resolve.add_argument("--decision", choices=["accepted", "rejected", "deferred"], required=True)
+    review_resolve.add_argument(
+        "--decision", choices=["accepted", "rejected", "deferred"], required=True
+    )
     review_resolve.add_argument("--note", required=True)
     review_resolve.add_argument("--canonical-subject")
 
@@ -299,7 +343,9 @@ def main() -> None:
             return
         for entry in corpora:
             marker = "*" if entry.get("default") else "-"
-            print(f"{marker} {entry['corpus_id']}: {entry['name']} [{entry.get('status', 'active')}]")
+            print(
+                f"{marker} {entry['corpus_id']}: {entry['name']} [{entry.get('status', 'active')}]"
+            )
             print(f"  root: {entry['root']}")
         return
 
@@ -496,7 +542,10 @@ def main() -> None:
             threshold_overrides=parse_threshold_overrides(args.set_threshold) or None,
         )
         if args.write:
-            payload = {**payload, "artifacts": write_policy_replay_artifacts(args.project_root, payload)}
+            payload = {
+                **payload,
+                "artifacts": write_policy_replay_artifacts(args.project_root, payload),
+            }
         print(json.dumps(payload, indent=2))
         return
 

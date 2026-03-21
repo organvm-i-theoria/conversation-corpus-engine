@@ -22,7 +22,9 @@ def seed_valid_corpus(root: Path, *, contract_name: str = "conversation-corpus-e
         "doctrine-briefs.json",
         "family-dossiers.json",
     ):
-        (corpus_dir / rel).write_text("[]" if rel != "semantic-v3-index.json" else '{"threads":[]}', encoding="utf-8")
+        (corpus_dir / rel).write_text(
+            "[]" if rel != "semantic-v3-index.json" else '{"threads":[]}', encoding="utf-8"
+        )
     (corpus_dir / "canonical-families.json").write_text("[]", encoding="utf-8")
     (corpus_dir / "action-ledger.json").write_text("[]", encoding="utf-8")
     (corpus_dir / "unresolved-ledger.json").write_text("[]", encoding="utf-8")
@@ -30,7 +32,13 @@ def seed_valid_corpus(root: Path, *, contract_name: str = "conversation-corpus-e
     (corpus_dir / "evaluation-summary.json").write_text("{}", encoding="utf-8")
     (corpus_dir / "regression-gates.json").write_text("{}", encoding="utf-8")
     (corpus_dir / "contract.json").write_text(
-        json.dumps({"contract_name": contract_name, "contract_version": 1, "adapter_type": "markdown-document"}),
+        json.dumps(
+            {
+                "contract_name": contract_name,
+                "contract_version": 1,
+                "adapter_type": "markdown-document",
+            }
+        ),
         encoding="utf-8",
     )
 

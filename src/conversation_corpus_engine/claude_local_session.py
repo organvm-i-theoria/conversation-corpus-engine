@@ -91,7 +91,9 @@ def find_safe_storage_password() -> tuple[str, str]:
     )
 
 
-def decrypt_chromium_cookie(encrypted_value: bytes, host_key: str, safe_storage_password: str) -> str:
+def decrypt_chromium_cookie(
+    encrypted_value: bytes, host_key: str, safe_storage_password: str
+) -> str:
     if not encrypted_value:
         return ""
     if not encrypted_value.startswith(b"v10"):
@@ -116,13 +118,17 @@ def decrypt_chromium_cookie(encrypted_value: bytes, host_key: str, safe_storage_
     )
     if result.returncode != 0:
         stderr = result.stderr.decode("utf-8", errors="replace").strip()
-        raise ClaudeLocalSessionError(f"OpenSSL failed to decrypt a Claude cookie: {stderr or 'unknown error'}")
+        raise ClaudeLocalSessionError(
+            f"OpenSSL failed to decrypt a Claude cookie: {stderr or 'unknown error'}"
+        )
     padded = result.stdout
     if not padded:
         return ""
     pad_length = padded[-1]
     if pad_length < 1 or pad_length > 16:
-        raise ClaudeLocalSessionError(f"Unexpected PKCS7 padding length while decrypting Claude cookie: {pad_length}")
+        raise ClaudeLocalSessionError(
+            f"Unexpected PKCS7 padding length while decrypting Claude cookie: {pad_length}"
+        )
     decrypted = padded[:-pad_length]
     host_hash = sha256(host_key.encode("utf-8")).digest()
     if decrypted.startswith(host_hash):
@@ -166,9 +172,13 @@ def load_claude_cookies(local_root: Path, *, safe_storage_password: str) -> dict
             if value:
                 cookies[cookie_name] = value
         if "sessionKey" not in cookies:
-            raise ClaudeLocalSessionError("Claude session cookie `sessionKey` is not present in the local cookie store.")
+            raise ClaudeLocalSessionError(
+                "Claude session cookie `sessionKey` is not present in the local cookie store."
+            )
         if "lastActiveOrg" not in cookies:
-            raise ClaudeLocalSessionError("Claude local session did not expose `lastActiveOrg` in the local cookie store.")
+            raise ClaudeLocalSessionError(
+                "Claude local session did not expose `lastActiveOrg` in the local cookie store."
+            )
         return cookies
     finally:
         connection.close()
@@ -215,8 +225,12 @@ def discover_claude_local_session(local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT) 
     bootstrap = fetch_claude_bootstrap(session)
     active_org_uuid = cookies["lastActiveOrg"]
     organizations = fetch_json(session, "https://claude.ai/api/organizations")
-    projects = fetch_json(session, f"https://claude.ai/api/organizations/{active_org_uuid}/projects")
-    conversations = fetch_json(session, f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations")
+    projects = fetch_json(
+        session, f"https://claude.ai/api/organizations/{active_org_uuid}/projects"
+    )
+    conversations = fetch_json(
+        session, f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations"
+    )
     account = bootstrap.get("account") or {}
     return {
         "generated_at": now_iso(),
@@ -239,7 +253,9 @@ def discover_claude_local_session(local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT) 
     }
 
 
-def fetch_claude_local_session_bundle(local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT) -> dict[str, Any]:
+def fetch_claude_local_session_bundle(
+    local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT,
+) -> dict[str, Any]:
     local_root = resolve_claude_local_root(local_root)
     safe_storage_service, safe_storage_password = find_safe_storage_password()
     cookies = load_claude_cookies(local_root, safe_storage_password=safe_storage_password)
@@ -248,8 +264,12 @@ def fetch_claude_local_session_bundle(local_root: Path = DEFAULT_CLAUDE_LOCAL_RO
     account = bootstrap.get("account") or {}
     organizations = fetch_json(session, "https://claude.ai/api/organizations")
     active_org_uuid = cookies["lastActiveOrg"]
-    projects = fetch_json(session, f"https://claude.ai/api/organizations/{active_org_uuid}/projects")
-    summaries = fetch_json(session, f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations")
+    projects = fetch_json(
+        session, f"https://claude.ai/api/organizations/{active_org_uuid}/projects"
+    )
+    summaries = fetch_json(
+        session, f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations"
+    )
 
     detailed_conversations: list[dict[str, Any]] = []
     detail_failures: list[dict[str, Any]] = []
@@ -259,7 +279,9 @@ def fetch_claude_local_session_bundle(local_root: Path = DEFAULT_CLAUDE_LOCAL_RO
         if not conversation_uuid:
             continue
         try:
-            detail = fetch_json(session, f"{detail_root}/{conversation_uuid}?tree=true&rendering_mode=messages")
+            detail = fetch_json(
+                session, f"{detail_root}/{conversation_uuid}?tree=true&rendering_mode=messages"
+            )
             detailed_conversations.append(detail)
         except Exception as exc:  # pragma: no cover - exercised live; unit tests mock this path.
             detail_failures.append({"uuid": conversation_uuid, "error": str(exc)})

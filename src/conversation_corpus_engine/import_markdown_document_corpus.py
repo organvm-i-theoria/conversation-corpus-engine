@@ -134,7 +134,9 @@ def now_iso() -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Import generic markdown files into a federation-compatible memory corpus.")
+    parser = argparse.ArgumentParser(
+        description="Import generic markdown files into a federation-compatible memory corpus."
+    )
     parser.add_argument("input_path", type=Path)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--name")
@@ -179,12 +181,16 @@ def split_sentences(text: str) -> list[str]:
 
 
 def top_keywords(text: str, *, limit: int = 12) -> list[str]:
-    counts = Counter(token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2)
+    counts = Counter(
+        token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2
+    )
     return [token for token, _ in counts.most_common(limit)]
 
 
 def vector_terms(text: str, *, limit: int = 18) -> dict[str, float]:
-    counts = Counter(token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2)
+    counts = Counter(
+        token for token in tokenize(text) if token not in STOP_WORDS and len(token) > 2
+    )
     if not counts:
         return {}
     max_count = max(counts.values())
@@ -487,9 +493,15 @@ def import_markdown_document_corpus(
                 "stable_themes": semantic_themes,
                 "doctrine_summary": f"{title} imported markdown document summary: {summary}",
                 "search_text": f"{title} doctrine {' '.join(keywords[:10])} {search_text}",
-                "actions": [{"action_key": item["action_key"], "canonical_action": item["canonical_action"]} for item in action_items],
+                "actions": [
+                    {"action_key": item["action_key"], "canonical_action": item["canonical_action"]}
+                    for item in action_items
+                ],
                 "unresolved": [
-                    {"question_key": item["question_key"], "canonical_question": item["canonical_question"]}
+                    {
+                        "question_key": item["question_key"],
+                        "canonical_question": item["canonical_question"],
+                    }
                     for item in unresolved_items
                 ],
                 "key_entities": key_entities,

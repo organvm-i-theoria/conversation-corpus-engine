@@ -70,7 +70,9 @@ def write_source_policy_payload(
     normalized = dict(payload)
     normalized["provider"] = provider
     write_json(source_policy_path(project_root, provider), normalized)
-    write_markdown(source_policy_report_path(project_root, provider), render_source_policy_markdown(normalized))
+    write_markdown(
+        source_policy_report_path(project_root, provider), render_source_policy_markdown(normalized)
+    )
     if append_history:
         append_source_policy_history(
             project_root,

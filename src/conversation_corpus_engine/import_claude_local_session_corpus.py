@@ -40,8 +40,13 @@ def write_local_session_bundle(bundle_root: Path, bundle: dict[str, Any]) -> Non
     write_json(bundle_root / "projects.json", bundle.get("projects") or [])
     write_json(bundle_root / "memories.json", bundle.get("memories") or [])
     write_json(bundle_root / "users.json", bundle.get("users") or [])
-    write_json(bundle_root / "conversation-summaries.json", bundle.get("conversation_summaries") or [])
-    write_json(bundle_root / "conversation-detail-failures.json", bundle.get("conversation_detail_failures") or [])
+    write_json(
+        bundle_root / "conversation-summaries.json", bundle.get("conversation_summaries") or []
+    )
+    write_json(
+        bundle_root / "conversation-detail-failures.json",
+        bundle.get("conversation_detail_failures") or [],
+    )
     write_json(bundle_root / "conversations.json", bundle.get("conversations") or [])
     details_root = bundle_root / "conversation-details"
     details_root.mkdir(parents=True, exist_ok=True)
@@ -88,15 +93,21 @@ def patch_contract_for_local_session(
     write_json(contract_path, contract)
 
     evaluation_summary = load_json(corpus_dir / "evaluation-summary.json", default={}) or {}
-    evaluation_summary["notes"] = ["Imported Claude local-session corpus has not been manually evaluated."]
+    evaluation_summary["notes"] = [
+        "Imported Claude local-session corpus has not been manually evaluated."
+    ]
     write_json(corpus_dir / "evaluation-summary.json", evaluation_summary)
 
     regression_gates = load_json(corpus_dir / "regression-gates.json", default={}) or {}
-    regression_gates["source_notes"] = ["Imported Claude local-session corpus has not been manually evaluated."]
+    regression_gates["source_notes"] = [
+        "Imported Claude local-session corpus has not been manually evaluated."
+    ]
     write_json(corpus_dir / "regression-gates.json", regression_gates)
 
 
-def rewrite_readme_for_local_session(output_root: Path, *, local_root: Path, bundle: dict[str, Any]) -> None:
+def rewrite_readme_for_local_session(
+    output_root: Path, *, local_root: Path, bundle: dict[str, Any]
+) -> None:
     conversation_failures = bundle.get("conversation_detail_failures") or []
     write_markdown(
         output_root / "README.md",
@@ -134,7 +145,9 @@ def import_claude_local_session_corpus(
     with tempfile.TemporaryDirectory(prefix="claude-local-session-") as tmpdir:
         bundle_root = Path(tmpdir) / "claude-local-bundle"
         write_local_session_bundle(bundle_root, bundle)
-        result = import_claude_export_corpus(bundle_root, output_root, corpus_id=corpus_id, name=name)
+        result = import_claude_export_corpus(
+            bundle_root, output_root, corpus_id=corpus_id, name=name
+        )
         source_root = output_root / "source"
         source_root.mkdir(parents=True, exist_ok=True)
         write_json(source_root / "local-session-discovery.json", discovery)

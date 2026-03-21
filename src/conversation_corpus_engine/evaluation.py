@@ -26,16 +26,30 @@ GATE_THRESHOLDS = {
     "retrieval_metrics.thread_hit_at_1": {"direction": "min", "pass": 0.5, "warn": 0.3},
     "retrieval_metrics.pair_hit_at_3": {"direction": "min", "pass": 0.5, "warn": 0.25},
     "answer_metrics.state_match_rate": {"direction": "min", "pass": 0.9, "warn": 0.75},
-    "answer_metrics.required_citation_coverage_avg": {"direction": "min", "pass": 0.9, "warn": 0.75},
-    "answer_metrics.forbidden_citation_violation_rate": {"direction": "max", "pass": 0.0, "warn": 0.1},
+    "answer_metrics.required_citation_coverage_avg": {
+        "direction": "min",
+        "pass": 0.9,
+        "warn": 0.75,
+    },
+    "answer_metrics.forbidden_citation_violation_rate": {
+        "direction": "max",
+        "pass": 0.0,
+        "warn": 0.1,
+    },
     "answer_metrics.abstention_match_rate": {"direction": "min", "pass": 0.9, "warn": 0.75},
 }
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a conversation corpus against local gold fixtures.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate a conversation corpus against local gold fixtures."
+    )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    parser.add_argument("--seed", action="store_true", help="Seed seeded fixtures and create manual fixture templates.")
+    parser.add_argument(
+        "--seed",
+        action="store_true",
+        help="Seed seeded fixtures and create manual fixture templates.",
+    )
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--json-output", type=Path)
@@ -58,8 +72,16 @@ def precision_recall(current: set[Any], gold: set[Any]) -> dict[str, Any]:
     true_positive = len(current & gold)
     false_positive = len(current - gold)
     false_negative = len(gold - current)
-    precision = round(true_positive / (true_positive + false_positive), 4) if (true_positive + false_positive) else None
-    recall = round(true_positive / (true_positive + false_negative), 4) if (true_positive + false_negative) else None
+    precision = (
+        round(true_positive / (true_positive + false_positive), 4)
+        if (true_positive + false_positive)
+        else None
+    )
+    recall = (
+        round(true_positive / (true_positive + false_negative), 4)
+        if (true_positive + false_negative)
+        else None
+    )
     return {
         "current_count": len(current),
         "gold_count": len(gold),
@@ -127,7 +149,11 @@ def build_seeded_retrieval_fixtures(
         pair_candidates = pairs_by_thread.get(canonical_thread_uid or "", [])
         if pair_candidates:
             pair = pair_candidates[0]
-            query_terms = [token for token in (pair.get("search_text") or pair.get("summary") or "").split() if len(token) > 4][:5]
+            query_terms = [
+                token
+                for token in (pair.get("search_text") or pair.get("summary") or "").split()
+                if len(token) > 4
+            ][:5]
             if query_terms:
                 fixtures.append(
                     {
@@ -314,7 +340,10 @@ def load_preferred_fixture(root: Path, kind: str) -> tuple[dict[str, Any], str, 
         payload = load_json(path, default={}) or {}
         if path.exists() and fallback[2] is None:
             fallback = (payload, source, str(path))
-        if manual_fixture_review_complete(kind, payload, source) or fixture_count(kind, payload) > 0:
+        if (
+            manual_fixture_review_complete(kind, payload, source)
+            or fixture_count(kind, payload) > 0
+        ):
             return payload, source, str(path)
     return fallback
 
@@ -339,14 +368,20 @@ def evaluate_answer_fixtures(root: Path, answer_payload: dict[str, Any]) -> dict
     for fixture in fixtures:
         query = fixture.get("query") or ""
         mode = fixture.get("mode")
-        retrieval = search_documents_v4(root, query, limit=max(8, fixture.get("limit", 8)), mode=mode)
+        retrieval = search_documents_v4(
+            root, query, limit=max(8, fixture.get("limit", 8)), mode=mode
+        )
         answer = build_answer(query, retrieval, mode=mode)
         required = set(fixture.get("required_citations", []))
         forbidden = set(fixture.get("forbidden_citations", []))
         present = set(answer.get("citations", []))
         coverage = round(len(required & present) / len(required), 4) if required else None
         required_coverages.append(coverage)
-        state_match = fixture.get("expected_state") == answer.get("answer_state") if fixture.get("expected_state") else None
+        state_match = (
+            fixture.get("expected_state") == answer.get("answer_state")
+            if fixture.get("expected_state")
+            else None
+        )
         evidence_ok = len(answer.get("evidence", [])) >= fixture.get("min_evidence_count", 0)
         forbidden_violation = bool(forbidden & present)
 
@@ -380,12 +415,20 @@ def evaluate_answer_fixtures(root: Path, answer_payload: dict[str, Any]) -> dict
     fixture_count_total = len(fixtures)
     return {
         "fixture_count": fixture_count_total,
-        "state_match_rate": round(state_matches / fixture_count_total, 4) if fixture_count_total else None,
+        "state_match_rate": round(state_matches / fixture_count_total, 4)
+        if fixture_count_total
+        else None,
         "required_citation_coverage_avg": average_metric(required_coverages),
-        "forbidden_citation_violation_rate": round(forbidden_violations / fixture_count_total, 4) if fixture_count_total else None,
-        "evidence_minimum_pass_rate": round(evidence_matches / fixture_count_total, 4) if fixture_count_total else None,
+        "forbidden_citation_violation_rate": round(forbidden_violations / fixture_count_total, 4)
+        if fixture_count_total
+        else None,
+        "evidence_minimum_pass_rate": round(evidence_matches / fixture_count_total, 4)
+        if fixture_count_total
+        else None,
         "abstention_fixture_count": abstention_expected,
-        "abstention_match_rate": round(abstention_matches / abstention_expected, 4) if abstention_expected else None,
+        "abstention_match_rate": round(abstention_matches / abstention_expected, 4)
+        if abstention_expected
+        else None,
         "fixtures": results,
     }
 
@@ -427,7 +470,9 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
         detector_precisions.append(detector_metrics[key]["precision"])
         detector_recalls.append(detector_metrics[key]["recall"])
 
-    current_family_map = {item["canonical_family_id"]: set(item.get("thread_uids", [])) for item in canonical_families}
+    current_family_map = {
+        item["canonical_family_id"]: set(item.get("thread_uids", [])) for item in canonical_families
+    }
     family_scores: list[dict[str, Any]] = []
     exact_match_count = 0
     for item in families_gold.get("families", []):
@@ -442,13 +487,22 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
                 "family_id": item["family_id"],
                 "member_jaccard": round(len(overlap) / len(union), 4) if union else None,
                 "canonical_thread_matches": item.get("canonical_thread_uid")
-                == next((family["canonical_thread_uid"] for family in canonical_families if family["canonical_family_id"] == item["family_id"]), None),
+                == next(
+                    (
+                        family["canonical_thread_uid"]
+                        for family in canonical_families
+                        if family["canonical_family_id"] == item["family_id"]
+                    ),
+                    None,
+                ),
             },
         )
     family_stability = {
         "gold_family_count": len(families_gold.get("families", [])),
         "current_family_count": len(canonical_families),
-        "exact_member_match_rate": round(exact_match_count / len(families_gold.get("families", [])), 4)
+        "exact_member_match_rate": round(
+            exact_match_count / len(families_gold.get("families", [])), 4
+        )
         if families_gold.get("families")
         else None,
         "families": family_scores,
@@ -465,10 +519,25 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
     thread_expected = 0
     pair_expected = 0
     for fixture in retrieval_payload.get("fixtures", []):
-        retrieval = search_documents_v4(root, fixture.get("query") or "", limit=max(8, fixture.get("limit", 8)), mode=fixture.get("mode"))
-        family_ids = [item.get("family_id") for item in retrieval.get("family_hits", []) if item.get("family_id")]
-        thread_ids = [item.get("thread_uid") for item in retrieval.get("thread_hits", []) if item.get("thread_uid")]
-        pair_ids = [item.get("pair_id") for item in retrieval.get("pair_hits", []) if item.get("pair_id")]
+        retrieval = search_documents_v4(
+            root,
+            fixture.get("query") or "",
+            limit=max(8, fixture.get("limit", 8)),
+            mode=fixture.get("mode"),
+        )
+        family_ids = [
+            item.get("family_id")
+            for item in retrieval.get("family_hits", [])
+            if item.get("family_id")
+        ]
+        thread_ids = [
+            item.get("thread_uid")
+            for item in retrieval.get("thread_hits", [])
+            if item.get("thread_uid")
+        ]
+        pair_ids = [
+            item.get("pair_id") for item in retrieval.get("pair_hits", []) if item.get("pair_id")
+        ]
         if fixture.get("expected_family_id"):
             family_expected += 1
             if family_ids[:1] == [fixture["expected_family_id"]]:
@@ -521,10 +590,26 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
     scorecard = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "fixture_sources": {
-            "detectors": {"source": detectors_source, "path": detectors_path, "count": fixture_count("detectors", detectors_gold)},
-            "families": {"source": families_source, "path": families_path, "count": fixture_count("families", families_gold)},
-            "retrieval": {"source": retrieval_source, "path": retrieval_path, "count": fixture_count("retrieval", retrieval_payload)},
-            "answers": {"source": answer_source, "path": answer_path, "count": fixture_count("answers", answer_payload)},
+            "detectors": {
+                "source": detectors_source,
+                "path": detectors_path,
+                "count": fixture_count("detectors", detectors_gold),
+            },
+            "families": {
+                "source": families_source,
+                "path": families_path,
+                "count": fixture_count("families", families_gold),
+            },
+            "retrieval": {
+                "source": retrieval_source,
+                "path": retrieval_path,
+                "count": fixture_count("retrieval", retrieval_payload),
+            },
+            "answers": {
+                "source": answer_source,
+                "path": answer_path,
+                "count": fixture_count("answers", answer_payload),
+            },
         },
         "detector_metrics": detector_metrics,
         "detector_summary": {
@@ -581,7 +666,9 @@ def build_regression_gates(scorecard: dict[str, Any]) -> dict[str, Any]:
     for kind in ("retrieval", "answers", "detectors", "families"):
         source = (fixture_sources.get(kind) or {}).get("source")
         if source != "manual":
-            source_notes.append(f"{kind} fixtures are sourced from {source or 'missing'}, not manual gold.")
+            source_notes.append(
+                f"{kind} fixtures are sourced from {source or 'missing'}, not manual gold."
+            )
     reliability_state = "warn" if source_notes else "pass"
     if reliability_state == "warn" and overall_state == "pass":
         overall_state = "warn"
@@ -706,7 +793,9 @@ def write_evaluation_outputs(
     write_json(resolved_outputs["gate_json"], scorecard["regression_gates"])
     write_markdown(resolved_outputs["latest_scorecard_md"], render_markdown(scorecard))
     write_json(resolved_outputs["latest_scorecard_json"], scorecard)
-    write_markdown(resolved_outputs["latest_gate_md"], render_gate_markdown(scorecard["regression_gates"]))
+    write_markdown(
+        resolved_outputs["latest_gate_md"], render_gate_markdown(scorecard["regression_gates"])
+    )
     write_json(resolved_outputs["latest_gate_json"], scorecard["regression_gates"])
     write_json(root / "corpus" / "evaluation-summary.json", scorecard)
     write_json(root / "corpus" / "regression-gates.json", scorecard["regression_gates"])

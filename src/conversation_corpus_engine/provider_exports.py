@@ -48,7 +48,9 @@ def path_has_supported_export_content(path: Path) -> bool:
 
 
 def looks_like_claude_bundle(path: Path) -> bool:
-    return path.is_dir() and (path / "conversations.json").exists() and (path / "users.json").exists()
+    return (
+        path.is_dir() and (path / "conversations.json").exists() and (path / "users.json").exists()
+    )
 
 
 def resolve_document_export_source_path(upload_root: Path, *, provider: str) -> Path:

@@ -104,7 +104,9 @@ def join_path(base_path: str, segment: str) -> str:
     return f"{base_path}.{segment}"
 
 
-def validate_instance(instance: Any, schema: dict[str, Any], *, path: str = "$") -> list[dict[str, str]]:
+def validate_instance(
+    instance: Any, schema: dict[str, Any], *, path: str = "$"
+) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     types = expected_types(schema)
     if types and not any(type_matches(instance, item) for item in types):

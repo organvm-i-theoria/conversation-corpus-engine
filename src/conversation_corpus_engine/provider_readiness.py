@@ -71,7 +71,11 @@ def target_readiness_state(target: dict[str, Any]) -> str:
 
 
 def target_register_command(target: dict[str, Any]) -> str:
-    corpus_name = target.get("contract_manifest", {}).get("name") or target.get("corpus_name") or target["corpus_id"]
+    corpus_name = (
+        target.get("contract_manifest", {}).get("name")
+        or target.get("corpus_name")
+        or target["corpus_id"]
+    )
     return (
         f"cce corpus register {shlex.quote(target['root'])} "
         f"--corpus-id {shlex.quote(target['corpus_id'])} --name {shlex.quote(corpus_name)}"
@@ -124,12 +128,19 @@ def summarize_provider_readiness(
 ) -> dict[str, Any]:
     config = get_provider_config(provider)
     registry = list(registry_by_corpus_id.values())
-    provider_targets = provider_corpus_targets(project_root, provider, source_drop_root, registry=registry)
-    targets = [inspect_target(target, registry_by_corpus_id, registry_by_root) for target in provider_targets]
+    provider_targets = provider_corpus_targets(
+        project_root, provider, source_drop_root, registry=registry
+    )
+    targets = [
+        inspect_target(target, registry_by_corpus_id, registry_by_root)
+        for target in provider_targets
+    ]
     for item in targets:
         item["readiness_state"] = target_readiness_state(item)
     selected_target = next((item for item in targets if item.get("selected")), targets[0])
-    policy = next((target.get("policy") for target in provider_targets if target.get("policy")), None)
+    policy = next(
+        (target.get("policy") for target in provider_targets if target.get("policy")), None
+    )
     return {
         "provider": provider,
         "display_name": config["display_name"],
@@ -181,17 +192,23 @@ def build_provider_readiness(project_root: Path, source_drop_root: Path) -> dict
         "source_drop_root": str(source_drop_root),
         "counts": {
             "providers": len(providers),
-            "corpora_present": sum(1 for item in providers if item["selected_target"].get("contract_present")),
-            "bootstrap_ready": sum(1 for item in providers if item["overall_state"] == "imported-needs-bootstrap"),
+            "corpora_present": sum(
+                1 for item in providers if item["selected_target"].get("contract_present")
+            ),
+            "bootstrap_ready": sum(
+                1 for item in providers if item["overall_state"] == "imported-needs-bootstrap"
+            ),
             "manual_pass": sum(
                 1
                 for item in providers
-                if item["selected_target"].get("summary", {}).get("evaluation_overall_state") == "pass"
+                if item["selected_target"].get("summary", {}).get("evaluation_overall_state")
+                == "pass"
             ),
             "registered_active": sum(
                 1
                 for item in providers
-                if item["selected_target"].get("registered") and item["selected_target"].get("registry_status") == "active"
+                if item["selected_target"].get("registered")
+                and item["selected_target"].get("registry_status") == "active"
             ),
         },
         "providers": providers,

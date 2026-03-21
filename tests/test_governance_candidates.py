@@ -76,16 +76,30 @@ class GovernanceCandidatesTests(unittest.TestCase):
                 threshold_overrides={"max_warn_corpora": 1.0},
                 note="Allow one warn corpus during transition.",
             )
-            approved = review_policy_candidate(project_root, staged["candidate_id"], decision="approve", note="Ready to apply.")
-            applied = apply_policy_candidate(project_root, staged["candidate_id"], note="Promote the reviewed threshold.")
+            approved = review_policy_candidate(
+                project_root, staged["candidate_id"], decision="approve", note="Ready to apply."
+            )
+            applied = apply_policy_candidate(
+                project_root, staged["candidate_id"], note="Promote the reviewed threshold."
+            )
             live_policy = load_or_create_promotion_policy(project_root)
-            rollback = rollback_policy_application(project_root, note="Restore the prior live thresholds.")
+            rollback = rollback_policy_application(
+                project_root, note="Restore the prior live thresholds."
+            )
             restored_policy = load_or_create_promotion_policy(project_root)
-            latest_application = json.loads(policy_application_latest_json_path(project_root).read_text(encoding="utf-8"))
-            live_pointer = json.loads(policy_live_pointer_path(project_root).read_text(encoding="utf-8"))
+            latest_application = json.loads(
+                policy_application_latest_json_path(project_root).read_text(encoding="utf-8")
+            )
+            live_pointer = json.loads(
+                policy_live_pointer_path(project_root).read_text(encoding="utf-8")
+            )
 
             self.assertEqual(staged["status"], "staged")
-            self.assertTrue((policy_candidates_dir(project_root) / staged["candidate_id"] / "replay.json").exists())
+            self.assertTrue(
+                (
+                    policy_candidates_dir(project_root) / staged["candidate_id"] / "replay.json"
+                ).exists()
+            )
             self.assertEqual(approved["status"], "approved")
             self.assertEqual(applied["candidate_id"], staged["candidate_id"])
             self.assertEqual(live_policy["version"], 2)
@@ -112,7 +126,12 @@ class GovernanceCandidatesTests(unittest.TestCase):
                 project_root,
                 threshold_overrides={"max_warn_corpora": 1.0},
             )
-            review_policy_candidate(project_root, staged["candidate_id"], decision="reject", note="Keep the stricter threshold.")
+            review_policy_candidate(
+                project_root,
+                staged["candidate_id"],
+                decision="reject",
+                note="Keep the stricter threshold.",
+            )
 
             with self.assertRaisesRegex(ValueError, "must be approved"):
                 apply_policy_candidate(project_root, staged["candidate_id"])

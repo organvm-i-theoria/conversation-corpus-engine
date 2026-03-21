@@ -56,7 +56,9 @@ def answers_dir(root: Path) -> Path:
 
 
 def validate_corpus_root(corpus_root: Path) -> dict[str, Any]:
-    missing = [relative for relative in REQUIRED_CONTRACT_FILES if not (corpus_root / relative).exists()]
+    missing = [
+        relative for relative in REQUIRED_CONTRACT_FILES if not (corpus_root / relative).exists()
+    ]
     contract_manifest = load_json(corpus_root / "corpus" / "contract.json", default={}) or {}
     return {
         "valid": not missing,
@@ -109,7 +111,9 @@ def load_registry(project_root: Path) -> dict[str, Any]:
 
 def save_registry(project_root: Path, registry: dict[str, Any]) -> dict[str, Any]:
     registry["generated_at"] = now_iso()
-    active = [entry for entry in registry.get("corpora", []) if entry.get("status", "active") == "active"]
+    active = [
+        entry for entry in registry.get("corpora", []) if entry.get("status", "active") == "active"
+    ]
     if active and not any(entry.get("default") for entry in active):
         active[0]["default"] = True
     if sum(1 for entry in active if entry.get("default")) > 1:
@@ -127,7 +131,9 @@ def save_registry(project_root: Path, registry: dict[str, Any]) -> dict[str, Any
     return registry
 
 
-def list_registered_corpora(project_root: Path, *, active_only: bool = False) -> list[dict[str, Any]]:
+def list_registered_corpora(
+    project_root: Path, *, active_only: bool = False
+) -> list[dict[str, Any]]:
     registry = load_registry(project_root)
     corpora = registry.get("corpora", [])
     if active_only:
@@ -152,7 +158,9 @@ def upsert_corpus(
 
     registry = load_registry(project_root)
     resolved_id = normalize_corpus_id(corpus_id or corpus_root.name)
-    existing = next((entry for entry in registry["corpora"] if entry["corpus_id"] == resolved_id), None)
+    existing = next(
+        (entry for entry in registry["corpora"] if entry["corpus_id"] == resolved_id), None
+    )
     if existing:
         entry = existing
         entry["name"] = name or entry.get("name") or corpus_root.name
@@ -172,7 +180,9 @@ def upsert_corpus(
         registry["corpora"].append(entry)
     if make_default:
         for item in registry["corpora"]:
-            item["default"] = item["corpus_id"] == resolved_id and item.get("status", "active") == "active"
+            item["default"] = (
+                item["corpus_id"] == resolved_id and item.get("status", "active") == "active"
+            )
     save_registry(project_root, registry)
     return entry
 
@@ -180,7 +190,9 @@ def upsert_corpus(
 def remove_corpus(project_root: Path, corpus_id: str) -> dict[str, Any]:
     registry = load_registry(project_root)
     before = len(registry["corpora"])
-    registry["corpora"] = [entry for entry in registry["corpora"] if entry["corpus_id"] != corpus_id]
+    registry["corpora"] = [
+        entry for entry in registry["corpora"] if entry["corpus_id"] != corpus_id
+    ]
     if len(registry["corpora"]) == before:
         raise KeyError(corpus_id)
     save_registry(project_root, registry)
@@ -213,7 +225,9 @@ def load_corpus_surface(entry: dict[str, Any]) -> dict[str, Any]:
         "action_count": len(actions),
         "unresolved_count": len(unresolved),
         "entity_count": len(entities),
-        "adapter_type": contract_manifest.get("adapter_type") or entry.get("adapter_type") or "unknown",
+        "adapter_type": contract_manifest.get("adapter_type")
+        or entry.get("adapter_type")
+        or "unknown",
         "evaluation_overall_state": gates.get("overall_state")
         or (evaluation.get("regression_gates") or {}).get("overall_state"),
         "source_reliability_state": gates.get("source_reliability_state"),
@@ -244,7 +258,9 @@ def load_corpus_surface(entry: dict[str, Any]) -> dict[str, Any]:
 
 def build_federation(project_root: Path) -> dict[str, Any]:
     registry = load_registry(project_root)
-    active_entries = [entry for entry in registry.get("corpora", []) if entry.get("status", "active") == "active"]
+    active_entries = [
+        entry for entry in registry.get("corpora", []) if entry.get("status", "active") == "active"
+    ]
     surfaces = [load_corpus_surface(entry) for entry in active_entries]
 
     corpora_summary = [surface["summary"] for surface in surfaces]
@@ -315,22 +331,40 @@ def build_federation(project_root: Path) -> dict[str, Any]:
 
     canon_outputs = build_federated_canon(project_root, surfaces)
     for item in corpora_summary:
-        contract_manifest = load_json(Path(item["root"]) / "corpus" / "contract.json", default={}) or {}
-        item["adapter_type"] = contract_manifest.get("adapter_type") or item.get("adapter_type") or "unknown"
+        contract_manifest = (
+            load_json(Path(item["root"]) / "corpus" / "contract.json", default={}) or {}
+        )
+        item["adapter_type"] = (
+            contract_manifest.get("adapter_type") or item.get("adapter_type") or "unknown"
+        )
         item["contract_name"] = contract_manifest.get("contract_name") or item.get("contract_name")
-        item["contract_version"] = contract_manifest.get("contract_version") or item.get("contract_version")
-        item["contract_manifest_present"] = bool(contract_manifest) or item.get("contract_manifest_present", False)
+        item["contract_version"] = contract_manifest.get("contract_version") or item.get(
+            "contract_version"
+        )
+        item["contract_manifest_present"] = bool(contract_manifest) or item.get(
+            "contract_manifest_present", False
+        )
     evaluation_summary = {
         "generated_at": now_iso(),
         "corpus_count": len(corpora_summary),
-        "healthy_corpus_count": sum(1 for item in corpora_summary if item.get("evaluation_overall_state") == "pass"),
-        "managed_corpus_count": sum(
-            1 for item in corpora_summary if item.get("source_freshness_state") not in {"not_applicable", None}
+        "healthy_corpus_count": sum(
+            1 for item in corpora_summary if item.get("evaluation_overall_state") == "pass"
         ),
-        "fresh_corpus_count": sum(1 for item in corpora_summary if item.get("source_freshness_state") == "fresh"),
-        "stale_corpus_count": sum(1 for item in corpora_summary if item.get("source_freshness_state") == "stale"),
+        "managed_corpus_count": sum(
+            1
+            for item in corpora_summary
+            if item.get("source_freshness_state") not in {"not_applicable", None}
+        ),
+        "fresh_corpus_count": sum(
+            1 for item in corpora_summary if item.get("source_freshness_state") == "fresh"
+        ),
+        "stale_corpus_count": sum(
+            1 for item in corpora_summary if item.get("source_freshness_state") == "stale"
+        ),
         "snapshot_missing_count": sum(
-            1 for item in corpora_summary if item.get("source_freshness_state") == "missing_snapshot"
+            1
+            for item in corpora_summary
+            if item.get("source_freshness_state") == "missing_snapshot"
         ),
         "missing_source_count": sum(
             1 for item in corpora_summary if item.get("source_freshness_state") == "missing_source"
@@ -354,7 +388,10 @@ def build_federation(project_root: Path) -> dict[str, Any]:
     write_json(fed_dir / "unresolved-index.json", unresolved_index)
     write_json(fed_dir / "entities-index.json", entities_index)
     write_json(fed_dir / "evaluation-summary.json", evaluation_summary)
-    write_markdown(federation_report_path(project_root), render_federation_summary(corpora_summary, evaluation_summary))
+    write_markdown(
+        federation_report_path(project_root),
+        render_federation_summary(corpora_summary, evaluation_summary),
+    )
     return {
         "registry_path": str(fed_dir / "registry.json"),
         "corpora_summary_path": str(fed_dir / "corpora-summary.json"),
@@ -368,7 +405,9 @@ def build_federation(project_root: Path) -> dict[str, Any]:
     }
 
 
-def render_federation_summary(corpora_summary: list[dict[str, Any]], evaluation_summary: dict[str, Any]) -> str:
+def render_federation_summary(
+    corpora_summary: list[dict[str, Any]], evaluation_summary: dict[str, Any]
+) -> str:
     lines = [
         "# Conversation Corpus Federation Summary",
         "",
@@ -408,7 +447,10 @@ def render_federation_summary(corpora_summary: list[dict[str, Any]], evaluation_
         )
         if item.get("missing_files"):
             lines.append(f"  missing={', '.join(item['missing_files'])}")
-        if item.get("source_freshness_note") and item.get("source_freshness_state") not in {"fresh", "not_applicable"}:
+        if item.get("source_freshness_note") and item.get("source_freshness_state") not in {
+            "fresh",
+            "not_applicable",
+        }:
             lines.append(f"  freshness_note={item['source_freshness_note']}")
     return "\n".join(lines).rstrip()
 
@@ -450,7 +492,14 @@ def load_federation_index(project_root: Path, ledger: str) -> Any:
         "evaluation-gates": "evaluation-gates.json",
         "evaluation-scorecard": "evaluation-scorecard.json",
     }
-    dict_ledgers = {"evaluation", "conflicts", "review-queue", "review-history", "evaluation-gates", "evaluation-scorecard"}
+    dict_ledgers = {
+        "evaluation",
+        "conflicts",
+        "review-queue",
+        "review-history",
+        "evaluation-gates",
+        "evaluation-scorecard",
+    }
     default = {} if ledger in dict_ledgers else []
     return load_json(federation_dir(project_root) / mapping[ledger], default=default) or default
 
@@ -469,26 +518,44 @@ def query_federation_index(
     if ledger == "review-queue":
         entries = payload.get("items", []) if isinstance(payload, dict) else []
         if corpus_id:
-            entries = [entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])]
+            entries = [
+                entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])
+            ]
         if text:
             lowered = text.lower()
-            entries = [entry for entry in entries if lowered in " ".join(str(value) for value in entry.values()).lower()]
+            entries = [
+                entry
+                for entry in entries
+                if lowered in " ".join(str(value) for value in entry.values()).lower()
+            ]
         return entries[:limit]
     if ledger == "review-history":
         entries = payload.get("items", []) if isinstance(payload, dict) else []
         if corpus_id:
-            entries = [entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])]
+            entries = [
+                entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])
+            ]
         if text:
             lowered = text.lower()
-            entries = [entry for entry in entries if lowered in " ".join(str(value) for value in entry.values()).lower()]
+            entries = [
+                entry
+                for entry in entries
+                if lowered in " ".join(str(value) for value in entry.values()).lower()
+            ]
         return entries[:limit]
     if ledger == "conflicts":
         entries = payload.get("potential_conflicts", []) if isinstance(payload, dict) else []
         if corpus_id:
-            entries = [entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])]
+            entries = [
+                entry for entry in entries if corpus_id in (entry.get("source_corpora") or [])
+            ]
         if text:
             lowered = text.lower()
-            entries = [entry for entry in entries if lowered in " ".join(str(value) for value in entry.values()).lower()]
+            entries = [
+                entry
+                for entry in entries
+                if lowered in " ".join(str(value) for value in entry.values()).lower()
+            ]
         return entries[:limit]
     entries = payload
     if corpus_id:
@@ -525,7 +592,9 @@ def exact_family_title_alignment_bonus(query: str, retrieval: dict[str, Any]) ->
     return 0.0
 
 
-def federated_score(entry: dict[str, Any], retrieval: dict[str, Any], project_root: Path, *, query: str) -> float:
+def federated_score(
+    entry: dict[str, Any], retrieval: dict[str, Any], project_root: Path, *, query: str
+) -> float:
     top_hit = (retrieval.get("hits") or [None])[0]
     score = float((top_hit or {}).get("score", 0.0))
     score += exact_family_title_alignment_bonus(query, retrieval)
@@ -603,7 +672,8 @@ def search_federation(
         }
         candidate["canon_support"] = canon_support_for_corpus(entry["corpus_id"], canon_hits)
         candidate["federated_score"] = round(
-            federated_score(entry, retrieval, project_root, query=query) + candidate["canon_support"],
+            federated_score(entry, retrieval, project_root, query=query)
+            + candidate["canon_support"],
             4,
         )
         candidates.append(candidate)
@@ -695,8 +765,12 @@ def build_federated_documents(project_root: Path) -> list[dict[str, Any]]:
     return documents
 
 
-def search_federated_canon(project_root: Path, query: str, *, limit: int = 6, mode: str | None = None) -> list[dict[str, Any]]:
-    query_tokens = [token for token in tokenize(query) if token and token not in STOP_WORDS and len(token) > 2]
+def search_federated_canon(
+    project_root: Path, query: str, *, limit: int = 6, mode: str | None = None
+) -> list[dict[str, Any]]:
+    query_tokens = [
+        token for token in tokenize(query) if token and token not in STOP_WORDS and len(token) > 2
+    ]
     if not query_tokens:
         return []
     documents = build_federated_documents(project_root)
@@ -764,8 +838,12 @@ def annotate_federated_answer(
     corpus_id = candidate["corpus_id"]
     answer = deepcopy(answer)
     answer["citations"] = prefix_citations(corpus_id, answer.get("citations"))
-    answer["evidence"] = [prefix_hit_payload(corpus_id, item) for item in answer.get("evidence", [])]
-    answer["top_hits"] = [prefix_hit_payload(corpus_id, item) for item in answer.get("top_hits", [])]
+    answer["evidence"] = [
+        prefix_hit_payload(corpus_id, item) for item in answer.get("evidence", [])
+    ]
+    answer["top_hits"] = [
+        prefix_hit_payload(corpus_id, item) for item in answer.get("top_hits", [])
+    ]
     retrieval = answer.get("retrieval") or {}
     for key in ("family_hits", "thread_hits", "pair_hits"):
         retrieval[key] = [prefix_hit_payload(corpus_id, item) for item in retrieval.get(key, [])]
@@ -788,7 +866,12 @@ def annotate_federated_answer(
             canon_facts.append(f"Federated canon: {item.get('title') or 'Untitled'}")
         answer["corpus_facts"] = canon_facts + list(answer.get("corpus_facts", []))
         answer["evidence"] = canon_hits[:2] + list(answer.get("evidence", []))
-        answer["citations"] = list(dict.fromkeys([citation for item in canon_hits for citation in item.get("citations", [])] + answer.get("citations", [])))
+        answer["citations"] = list(
+            dict.fromkeys(
+                [citation for item in canon_hits for citation in item.get("citations", [])]
+                + answer.get("citations", [])
+            )
+        )
     answer["federation"] = {
         "selected_corpus": answer["selected_corpus"],
         "candidate_corpora": [
@@ -839,8 +922,12 @@ def build_federated_answer(
     top_hit = ((selected.get("retrieval") or {}).get("hits") or [None])[0]
     raw_query_tokens = tokenize(query)
     raw_lexical_support = lexical_support_for_tokens(raw_query_tokens, top_hit) if top_hit else 0.0
-    canon_coverage = ((top_canon.get("diagnostics") or {}).get("coverage", 0.0)) if top_canon else 0.0
-    canon_phrase = ((top_canon.get("diagnostics") or {}).get("phrase_boost", 0.0)) if top_canon else 0.0
+    canon_coverage = (
+        ((top_canon.get("diagnostics") or {}).get("coverage", 0.0)) if top_canon else 0.0
+    )
+    canon_phrase = (
+        ((top_canon.get("diagnostics") or {}).get("phrase_boost", 0.0)) if top_canon else 0.0
+    )
     canon_score = top_canon.get("score", 0.0) if top_canon else 0.0
     annotated = annotate_federated_answer(answer, selected, federation, canon_hits=canon_hits)
     if (
@@ -852,8 +939,12 @@ def build_federated_answer(
     ):
         annotated["answer_state"] = "abstain"
         annotated["confidence"] = 0.18
-        annotated["state_reason"] = "Cross-corpus evidence is too weak or generic to support a grounded federated answer."
-        annotated["answer"] = "The federation does not have strong enough cross-corpus evidence to answer that reliably."
+        annotated["state_reason"] = (
+            "Cross-corpus evidence is too weak or generic to support a grounded federated answer."
+        )
+        annotated["answer"] = (
+            "The federation does not have strong enough cross-corpus evidence to answer that reliably."
+        )
         annotated["corpus_facts"] = []
         annotated["inference"] = []
         annotated["ambiguity"] = [
@@ -893,8 +984,8 @@ def render_federated_answer_text(answer: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-        "Candidate Corpora",
-        "",
+            "Candidate Corpora",
+            "",
         ],
     )
     if candidate_corpora:
@@ -972,8 +1063,7 @@ def render_federation_query_text(ledger: str, payload: Any) -> str:
         ]
         for key, item in (payload.get("fixture_sources") or {}).items():
             lines.append(
-                "- "
-                + f"{key}: source={item.get('source')} count={item.get('count')}",
+                "- " + f"{key}: source={item.get('source')} count={item.get('count')}",
             )
         if payload.get("routing_metrics"):
             lines.append("")
@@ -1000,7 +1090,12 @@ def render_federation_query_text(ledger: str, payload: Any) -> str:
             or "Untitled"
         )
         lines.append(f"{title}")
-        corpus_display = entry.get("corpus_name") or entry.get("corpus_id") or ", ".join(entry.get("corpus_ids") or []) or "n/a"
+        corpus_display = (
+            entry.get("corpus_name")
+            or entry.get("corpus_id")
+            or ", ".join(entry.get("corpus_ids") or [])
+            or "n/a"
+        )
         lines.append(f"  corpus: {corpus_display}")
         if entry.get("source_corpora"):
             lines.append(f"  source_corpora: {', '.join(entry.get('source_corpora') or [])}")
