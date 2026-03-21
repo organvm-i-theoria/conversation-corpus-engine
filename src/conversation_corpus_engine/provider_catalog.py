@@ -13,10 +13,13 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "display_name": "ChatGPT",
         "adapter_state": "supported",
         "adapter_type": "chatgpt-export",
+        "adapter_type_aliases": ["chatgpt-history"],
         "discovery_mode": "chatgpt-bundle",
         "inbox_rel": "chatgpt/inbox",
         "default_corpus_id": "chatgpt-history-memory",
         "default_corpus_name": "ChatGPT History Memory",
+        "fallback_corpus_id": "chatgpt-history",
+        "fallback_corpus_name": "ChatGPT History",
         "calibration_only": True,
     },
     "claude": {
