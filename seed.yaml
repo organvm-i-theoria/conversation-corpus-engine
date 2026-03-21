@@ -1,0 +1,32 @@
+organ: ORGAN-I
+org: organvm-i-theoria
+repo: conversation-corpus-engine
+
+metadata:
+  tier: standard
+  promotion_status: GRADUATED
+  description: >-
+    Canonical corpus and federation engine for multi-provider AI conversation memory.
+    Owns provider import, evaluation, governance, federation, and Meta/MCP surface exports.
+  language: python
+  license: MIT
+
+produces:
+  - surface-manifest.json
+  - mcp-context.json
+  - surface-bundle.json
+  - corpus-contract.schema.json
+  - surface-manifest.schema.json
+  - mcp-context.schema.json
+  - surface-bundle.schema.json
+  - promotion-policy.schema.json
+  - provider-refresh.schema.json
+  - source-policy.schema.json
+  - corpus-candidate.schema.json
+
+consumes:
+  - provider-exports
+
+subscriptions:
+  - governance.updated
+  - schema.registry.sync
