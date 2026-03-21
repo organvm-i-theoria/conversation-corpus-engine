@@ -81,6 +81,46 @@ def resolve_document_export_source_path(upload_root: Path, *, provider: str) -> 
     )
 
 
+def looks_like_chatgpt_export(path: Path) -> bool:
+    """Detect a ChatGPT export: has conversations.json + user.json (singular, not plural)."""
+    if not path.is_dir():
+        return False
+    has_conversations = (path / "conversations.json").exists()
+    has_user_singular = (path / "user.json").exists()
+    has_users_plural = (path / "users.json").exists()
+    # ChatGPT exports have user.json; Claude exports have users.json
+    return has_conversations and has_user_singular and not has_users_plural
+
+
+def resolve_chatgpt_source_path(upload_root: Path) -> Path:
+    """Resolve a ChatGPT export source from an inbox directory."""
+    upload_root = upload_root.resolve()
+    if looks_like_chatgpt_export(upload_root):
+        return upload_root
+    entries = visible_entries(upload_root)
+    if not entries:
+        raise FileNotFoundError(
+            f"No ChatGPT upload was found in {upload_root}. "
+            "Put the raw ChatGPT export folder there first.",
+        )
+    export_dirs = [
+        item.resolve() for item in entries if looks_like_chatgpt_export(item)
+    ]
+    if len(export_dirs) == 1:
+        return export_dirs[0]
+    if len(export_dirs) > 1:
+        raise FileNotFoundError(
+            f"Multiple ChatGPT export bundles were found in {upload_root}. "
+            "Leave only one at a time.",
+        )
+    if len(entries) == 1:
+        return entries[0].resolve()
+    raise FileNotFoundError(
+        f"ChatGPT upload inbox {upload_root} contains multiple visible entries "
+        "but no ChatGPT export could be selected.",
+    )
+
+
 def resolve_claude_source_path(upload_root: Path) -> Path:
     upload_root = upload_root.resolve()
     if looks_like_claude_bundle(upload_root):
