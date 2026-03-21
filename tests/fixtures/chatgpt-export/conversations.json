@@ -1,0 +1,131 @@
+[
+  {
+    "title": "Python Type Hints",
+    "create_time": 1710000000.0,
+    "update_time": 1710000300.0,
+    "mapping": {
+      "msg-system-001": {
+        "id": "msg-system-001",
+        "message": {
+          "id": "msg-system-001",
+          "author": {"role": "system"},
+          "content": {"content_type": "text", "parts": ["You are ChatGPT."]},
+          "create_time": 1710000000.0
+        },
+        "parent": null,
+        "children": ["msg-user-001"]
+      },
+      "msg-user-001": {
+        "id": "msg-user-001",
+        "message": {
+          "id": "msg-user-001",
+          "author": {"role": "user"},
+          "content": {"content_type": "text", "parts": ["Explain Python type hints for function signatures."]},
+          "create_time": 1710000010.0
+        },
+        "parent": "msg-system-001",
+        "children": ["msg-asst-001"]
+      },
+      "msg-asst-001": {
+        "id": "msg-asst-001",
+        "message": {
+          "id": "msg-asst-001",
+          "author": {"role": "assistant"},
+          "content": {"content_type": "text", "parts": ["Type hints in Python let you annotate function parameters and return values. Use the typing module for complex types like Optional, Union, and generics."]},
+          "create_time": 1710000020.0
+        },
+        "parent": "msg-user-001",
+        "children": []
+      }
+    },
+    "conversation_id": "conv-fixture-001"
+  },
+  {
+    "title": "Git Rebase Strategy",
+    "create_time": 1710100000.0,
+    "update_time": 1710100600.0,
+    "mapping": {
+      "msg-system-002": {
+        "id": "msg-system-002",
+        "message": {
+          "id": "msg-system-002",
+          "author": {"role": "system"},
+          "content": {"content_type": "text", "parts": ["You are ChatGPT."]},
+          "create_time": 1710100000.0
+        },
+        "parent": null,
+        "children": ["msg-user-002"]
+      },
+      "msg-user-002": {
+        "id": "msg-user-002",
+        "message": {
+          "id": "msg-user-002",
+          "author": {"role": "user"},
+          "content": {"content_type": "text", "parts": ["When should I use git rebase instead of merge?"]},
+          "create_time": 1710100010.0
+        },
+        "parent": "msg-system-002",
+        "children": ["msg-asst-002"]
+      },
+      "msg-asst-002": {
+        "id": "msg-asst-002",
+        "message": {
+          "id": "msg-asst-002",
+          "author": {"role": "assistant"},
+          "content": {"content_type": "text", "parts": ["Rebase is best for keeping a linear history on feature branches before merging. Use merge for shared branches where you need to preserve the full commit graph."]},
+          "create_time": 1710100020.0
+        },
+        "parent": "msg-user-002",
+        "children": ["msg-user-003"]
+      },
+      "msg-user-003": {
+        "id": "msg-user-003",
+        "message": {
+          "id": "msg-user-003",
+          "author": {"role": "user"},
+          "content": {"content_type": "text", "parts": ["What about interactive rebase for squashing commits?"]},
+          "create_time": 1710100030.0
+        },
+        "parent": "msg-asst-002",
+        "children": ["msg-asst-003"]
+      },
+      "msg-asst-003": {
+        "id": "msg-asst-003",
+        "message": {
+          "id": "msg-asst-003",
+          "author": {"role": "assistant"},
+          "content": {"content_type": "text", "parts": ["Interactive rebase with git rebase -i lets you squash, reorder, and edit commits. It is ideal for cleaning up a feature branch before a pull request."]},
+          "create_time": 1710100040.0
+        },
+        "parent": "msg-user-003",
+        "children": []
+      }
+    },
+    "conversation_id": "conv-fixture-002"
+  },
+  {
+    "title": null,
+    "create_time": 1710200000.0,
+    "update_time": 1710200000.0,
+    "mapping": {
+      "msg-system-003": {
+        "id": "msg-system-003",
+        "message": null,
+        "parent": null,
+        "children": ["msg-user-004"]
+      },
+      "msg-user-004": {
+        "id": "msg-user-004",
+        "message": {
+          "id": "msg-user-004",
+          "author": {"role": "user"},
+          "content": {"content_type": "text", "parts": ["Hello"]},
+          "create_time": 1710200010.0
+        },
+        "parent": "msg-system-003",
+        "children": []
+      }
+    },
+    "conversation_id": "conv-fixture-003"
+  }
+]
