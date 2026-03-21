@@ -14,6 +14,7 @@ SUPPORTED_SOURCE_ADAPTERS = {
     "markdown-transcript",
     "claude-export",
     "claude-local-session",
+    "chatgpt-export",
     "copilot-export",
     "gemini-export",
     "grok-export",
@@ -106,6 +107,11 @@ def collect_source_files(
                     files.append(tracked)
                 elif tracked.is_dir():
                     files.extend(path for path in tracked.rglob("*") if path.is_file())
+    elif adapter_type == "chatgpt-export":
+        if source_input.is_file():
+            files = [source_input]
+        else:
+            files = sorted(path for path in source_input.rglob("*.json") if path.is_file())
     elif adapter_type in {"copilot-export", "gemini-export", "grok-export", "perplexity-export"}:
         files = collect_supported_export_files(source_input)
     else:
