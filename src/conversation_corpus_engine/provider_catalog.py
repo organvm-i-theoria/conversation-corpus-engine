@@ -9,6 +9,16 @@ from .source_policy import load_source_policy
 DEFAULT_SOURCE_DROP_ENV = "CCE_SOURCE_DROP_ROOT"
 
 PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
+    "chatgpt": {
+        "display_name": "ChatGPT",
+        "adapter_state": "supported",
+        "adapter_type": "chatgpt-export",
+        "discovery_mode": "chatgpt-bundle",
+        "inbox_rel": "chatgpt/inbox",
+        "default_corpus_id": "chatgpt-history-memory",
+        "default_corpus_name": "ChatGPT History Memory",
+        "calibration_only": True,
+    },
     "claude": {
         "display_name": "Claude",
         "adapter_state": "supported",

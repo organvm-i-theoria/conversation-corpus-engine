@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -96,6 +97,58 @@ class ImportChatGPTExportCorpusTests(unittest.TestCase):
             # The null-title conversation should have an inferred title
             self.assertTrue(
                 all(isinstance(t, str) and len(t) > 0 for t in titles)
+            )
+
+
+from conversation_corpus_engine.provider_catalog import PROVIDER_CONFIG  # noqa: E402
+from conversation_corpus_engine.provider_discovery import discover_provider_uploads  # noqa: E402
+from conversation_corpus_engine.provider_import import import_provider_corpus  # noqa: E402
+
+
+class ChatGPTProviderIntegrationTests(unittest.TestCase):
+    def test_chatgpt_in_provider_config(self) -> None:
+        self.assertIn("chatgpt", PROVIDER_CONFIG)
+        self.assertEqual(
+            PROVIDER_CONFIG["chatgpt"]["adapter_type"], "chatgpt-export"
+        )
+
+    def test_discover_chatgpt_upload_in_inbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            source_drop_root = Path(tmpdir) / "source-drop"
+            inbox = source_drop_root / "chatgpt" / "inbox"
+            inbox.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(
+                FIXTURE_ROOT / "conversations.json",
+                inbox / "conversations.json",
+            )
+            shutil.copy2(
+                FIXTURE_ROOT / "user.json",
+                inbox / "user.json",
+            )
+            payload = discover_provider_uploads(project_root, source_drop_root)
+            chatgpt = next(
+                item
+                for item in payload["providers"]
+                if item["provider"] == "chatgpt"
+            )
+            self.assertEqual(chatgpt["upload_state"], "ready")
+
+    def test_import_provider_corpus_routes_chatgpt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            source_path = FIXTURE_ROOT
+            output_root = Path(tmpdir) / "chatgpt-history-memory"
+            result = import_provider_corpus(
+                project_root=project_root,
+                provider="chatgpt",
+                source_path=source_path,
+                output_root=output_root,
+                bootstrap_eval=False,
+            )
+            self.assertEqual(result["provider"], "chatgpt")
+            self.assertGreaterEqual(
+                result["import_result"]["thread_count"], 2
             )
 
 

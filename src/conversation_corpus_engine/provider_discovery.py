@@ -6,6 +6,7 @@ from typing import Any
 
 from .provider_catalog import PROVIDER_CONFIG, get_provider_config
 from .provider_exports import (
+    looks_like_chatgpt_export,
     looks_like_claude_bundle,
     path_has_supported_export_content,
     visible_entries,
@@ -20,11 +21,12 @@ def summarize_provider(provider: str, source_drop_root: Path) -> dict[str, Any]:
     config = get_provider_config(provider)
     inbox_root = (source_drop_root / config["inbox_rel"]).resolve()
     entries = visible_entries(inbox_root)
-    detector = (
-        looks_like_claude_bundle
-        if config["discovery_mode"] == "claude-bundle"
-        else path_has_supported_export_content
-    )
+    if config["discovery_mode"] == "claude-bundle":
+        detector = looks_like_claude_bundle
+    elif config["discovery_mode"] == "chatgpt-bundle":
+        detector = looks_like_chatgpt_export
+    else:
+        detector = path_has_supported_export_content
     detected_source_path = None
     upload_state = "empty"
     local_source_root = config.get("local_source_root")

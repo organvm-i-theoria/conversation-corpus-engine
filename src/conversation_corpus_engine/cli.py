@@ -119,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_import.add_argument("--project-root", type=Path, default=default_project_root())
     provider_import.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"], required=True
     )
     provider_import.add_argument("--mode", choices=["upload", "local-session"], default="upload")
     provider_import.add_argument("--source-drop-root", type=Path)
@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         "bootstrap-eval", help="Scaffold manual evaluation files for a provider corpus"
     )
     provider_bootstrap.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"], required=True
     )
     provider_bootstrap.add_argument("--project-root", type=Path, default=default_project_root())
     provider_bootstrap.add_argument("--target-root", type=Path)
@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
         "refresh", help="Import, evaluate, and stage a refreshed provider corpus"
     )
     provider_refresh.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"], required=True
     )
     provider_refresh.add_argument("--project-root", type=Path, default=default_project_root())
     provider_refresh.add_argument("--mode", choices=["upload", "local-session"])
@@ -200,13 +200,13 @@ def build_parser() -> argparse.ArgumentParser:
     source_policy_show = source_policy_sub.add_parser("show", help="Show a provider source policy")
     source_policy_show.add_argument("--project-root", type=Path, default=default_project_root())
     source_policy_show.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"], required=True
     )
     source_policy_show.add_argument("--json", action="store_true")
     source_policy_set = source_policy_sub.add_parser("set", help="Set a provider source policy")
     source_policy_set.add_argument("--project-root", type=Path, default=default_project_root())
     source_policy_set.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"], required=True
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"], required=True
     )
     source_policy_set.add_argument("--primary-root", type=Path, required=True)
     source_policy_set.add_argument("--primary-corpus-id", required=True)
@@ -271,7 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_stage.add_argument("--candidate-root", type=Path, required=True)
     candidate_stage.add_argument("--live-corpus-id")
     candidate_stage.add_argument(
-        "--provider", choices=["claude", "gemini", "grok", "perplexity", "copilot"]
+        "--provider", choices=["chatgpt", "claude", "gemini", "grok", "perplexity", "copilot"]
     )
     candidate_stage.add_argument("--note", default="")
     candidate_stage.add_argument("--json", action="store_true")

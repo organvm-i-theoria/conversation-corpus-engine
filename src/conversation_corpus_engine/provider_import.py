@@ -6,6 +6,7 @@ from typing import Any
 from .claude_local_session import DEFAULT_CLAUDE_LOCAL_ROOT
 from .evaluation_bootstrap import bootstrap_provider_evaluation
 from .federation import build_federation, upsert_corpus
+from .import_chatgpt_export_corpus import import_chatgpt_export_corpus
 from .import_claude_export_corpus import import_claude_export_corpus
 from .import_claude_local_session_corpus import import_claude_local_session_corpus
 from .import_document_export_corpus import import_document_export_corpus
@@ -14,7 +15,11 @@ from .provider_catalog import (
     default_source_drop_root,
     get_provider_config,
 )
-from .provider_exports import resolve_claude_source_path, resolve_document_export_source_path
+from .provider_exports import (
+    resolve_chatgpt_source_path,
+    resolve_claude_source_path,
+    resolve_document_export_source_path,
+)
 
 
 def bootstrap_manual_review(
@@ -52,6 +57,11 @@ def resolve_provider_import_source(
         source_drop_root or default_source_drop_root(project_root)
     ).resolve()
     inbox_root = resolved_source_drop_root / provider / "inbox"
+    if provider == "chatgpt":
+        return resolve_chatgpt_source_path(inbox_root), {
+            "resolution": "provider-inbox",
+            "inbox_root": str(inbox_root),
+        }
     if provider == "claude":
         return resolve_claude_source_path(inbox_root), {
             "resolution": "provider-inbox",
@@ -123,6 +133,15 @@ def import_provider_corpus(
         resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
         resolved_name = resolved_name or config["default_corpus_name"]
         import_result = import_claude_local_session_corpus(
+            resolved_source_path,
+            resolved_output_root,
+            corpus_id=resolved_corpus_id,
+            name=resolved_name,
+        )
+    elif provider == "chatgpt":
+        resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
+        resolved_name = resolved_name or config["default_corpus_name"]
+        import_result = import_chatgpt_export_corpus(
             resolved_source_path,
             resolved_output_root,
             corpus_id=resolved_corpus_id,
