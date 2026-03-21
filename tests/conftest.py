@@ -110,9 +110,7 @@ def seed_minimal_corpus(
         ),
         encoding="utf-8",
     )
-    (eval_dir / "manual-review-guide.md").write_text(
-        "# Manual Review\n", encoding="utf-8"
-    )
+    (eval_dir / "manual-review-guide.md").write_text("# Manual Review\n", encoding="utf-8")
     return root
 
 
@@ -124,9 +122,7 @@ def write_markdown_sources(root: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8")
 
 
-def seed_provider_inbox(
-    source_drop_root: Path, provider: str, files: dict[str, str]
-) -> Path:
+def seed_provider_inbox(source_drop_root: Path, provider: str, files: dict[str, str]) -> Path:
     """Seed a provider inbox under source-drop with the given files."""
     inbox = source_drop_root / provider / "inbox"
     inbox.mkdir(parents=True, exist_ok=True)

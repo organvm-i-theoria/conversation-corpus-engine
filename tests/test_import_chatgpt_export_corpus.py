@@ -54,14 +54,10 @@ class ImportChatGPTExportCorpusTests(unittest.TestCase):
 
             # Verify contract.json was written
             contract = json.loads(
-                (output_root / "corpus" / "contract.json").read_text(
-                    encoding="utf-8"
-                ),
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8"),
             )
             self.assertEqual(contract["adapter_type"], "chatgpt-export")
-            self.assertEqual(
-                contract["contract_name"], "conversation-corpus-engine-v1"
-            )
+            self.assertEqual(contract["contract_name"], "conversation-corpus-engine-v1")
 
             # Verify federation-required files exist
             corpus_dir = output_root / "corpus"
@@ -88,16 +84,12 @@ class ImportChatGPTExportCorpusTests(unittest.TestCase):
                 name="ChatGPT Memory",
             )
             threads = json.loads(
-                (output_root / "corpus" / "threads-index.json").read_text(
-                    encoding="utf-8"
-                ),
+                (output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8"),
             )
             # At least one thread should exist even from the null-title conversation
             titles = [t["title_normalized"] for t in threads]
             # The null-title conversation should have an inferred title
-            self.assertTrue(
-                all(isinstance(t, str) and len(t) > 0 for t in titles)
-            )
+            self.assertTrue(all(isinstance(t, str) and len(t) > 0 for t in titles))
 
 
 from conversation_corpus_engine.provider_catalog import PROVIDER_CONFIG  # noqa: E402
@@ -108,9 +100,7 @@ from conversation_corpus_engine.provider_import import import_provider_corpus  #
 class ChatGPTProviderIntegrationTests(unittest.TestCase):
     def test_chatgpt_in_provider_config(self) -> None:
         self.assertIn("chatgpt", PROVIDER_CONFIG)
-        self.assertEqual(
-            PROVIDER_CONFIG["chatgpt"]["adapter_type"], "chatgpt-export"
-        )
+        self.assertEqual(PROVIDER_CONFIG["chatgpt"]["adapter_type"], "chatgpt-export")
 
     def test_discover_chatgpt_upload_in_inbox(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -127,11 +117,7 @@ class ChatGPTProviderIntegrationTests(unittest.TestCase):
                 inbox / "user.json",
             )
             payload = discover_provider_uploads(project_root, source_drop_root)
-            chatgpt = next(
-                item
-                for item in payload["providers"]
-                if item["provider"] == "chatgpt"
-            )
+            chatgpt = next(item for item in payload["providers"] if item["provider"] == "chatgpt")
             self.assertEqual(chatgpt["upload_state"], "ready")
 
     def test_import_provider_corpus_routes_chatgpt(self) -> None:
@@ -147,9 +133,7 @@ class ChatGPTProviderIntegrationTests(unittest.TestCase):
                 bootstrap_eval=False,
             )
             self.assertEqual(result["provider"], "chatgpt")
-            self.assertGreaterEqual(
-                result["import_result"]["thread_count"], 2
-            )
+            self.assertGreaterEqual(result["import_result"]["thread_count"], 2)
 
 
 if __name__ == "__main__":

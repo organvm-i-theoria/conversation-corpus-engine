@@ -22,7 +22,8 @@ from conversation_corpus_engine.source_policy import load_source_policy, set_sou
 
 def token_map(*tokens: str) -> dict[str, float]:
     return {
-        token: round(1.0 - (index * 0.08), 4) for index, token in enumerate(tokens)  # allow-secret
+        token: round(1.0 - (index * 0.08), 4)  # allow-secret
+        for index, token in enumerate(tokens)
     }
 
 

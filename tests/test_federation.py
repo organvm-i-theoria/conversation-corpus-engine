@@ -14,7 +14,8 @@ from conversation_corpus_engine import federation as MODULE
 
 def token_map(*tokens: str) -> dict[str, float]:
     return {
-        token: round(1.0 - (index * 0.05), 4) for index, token in enumerate(tokens)  # allow-secret
+        token: round(1.0 - (index * 0.05), 4)  # allow-secret
+        for index, token in enumerate(tokens)
     }
 
 

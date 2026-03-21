@@ -191,7 +191,8 @@ def vector_terms(text: str, *, limit: int = 18) -> dict[str, float]:
         return {}
     highest = max(counts.values())
     return {
-        token: round(count / highest, 4) for token, count in counts.most_common(limit)  # allow-secret
+        token: round(count / highest, 4)  # allow-secret
+        for token, count in counts.most_common(limit)
     }
 
 
@@ -277,7 +278,9 @@ def walk_mapping_tree(mapping: dict[str, Any]) -> list[dict[str, Any]]:
     return ordered
 
 
-def infer_title_chatgpt(conversation: dict[str, Any], nodes: list[dict[str, Any]], fallback_index: int) -> str:
+def infer_title_chatgpt(
+    conversation: dict[str, Any], nodes: list[dict[str, Any]], fallback_index: int
+) -> str:
     title = conversation.get("title")
     if isinstance(title, str) and normalize_whitespace(title):
         return normalize_whitespace(title)
@@ -444,7 +447,9 @@ def import_chatgpt_export_corpus(
         action_items_text = extract_actions(sentences)
         unresolved_items_text = extract_unresolved(sentences)
         summary = shorten(" ".join(sentences[:3]) or combined_text or title, 320)
-        update_time = epoch_to_iso(conversation.get("update_time") or conversation.get("create_time"))
+        update_time = epoch_to_iso(
+            conversation.get("update_time") or conversation.get("create_time")
+        )
         key_entities = build_entities(title, keywords)
         semantic_entities = [entity["canonical_label"] for entity in key_entities]
         pair_items = build_pairs_chatgpt(nodes, thread_uid, family_id)

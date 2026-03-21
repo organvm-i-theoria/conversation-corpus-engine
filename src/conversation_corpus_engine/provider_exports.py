@@ -103,9 +103,7 @@ def resolve_chatgpt_source_path(upload_root: Path) -> Path:
             f"No ChatGPT upload was found in {upload_root}. "
             "Put the raw ChatGPT export folder there first.",
         )
-    export_dirs = [
-        item.resolve() for item in entries if looks_like_chatgpt_export(item)
-    ]
+    export_dirs = [item.resolve() for item in entries if looks_like_chatgpt_export(item)]
     if len(export_dirs) == 1:
         return export_dirs[0]
     if len(export_dirs) > 1:

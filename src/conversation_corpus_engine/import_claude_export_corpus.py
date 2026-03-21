@@ -185,7 +185,8 @@ def vector_terms(text: str, *, limit: int = 18) -> dict[str, float]:
         return {}
     highest = max(counts.values())
     return {
-        token: round(count / highest, 4) for token, count in counts.most_common(limit)  # allow-secret
+        token: round(count / highest, 4)  # allow-secret
+        for token, count in counts.most_common(limit)
     }
 
 
