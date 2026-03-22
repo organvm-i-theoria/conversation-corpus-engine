@@ -1,3 +1,4 @@
+schema_version: "1.1"
 organ: ORGAN-I
 org: organvm-i-theoria
 repo: conversation-corpus-engine
@@ -11,22 +12,48 @@ metadata:
   language: python
   license: MIT
 
+functional_class: ENGINE
+functional_class_secondary: INFRASTRUCTURE
+formation_type: GENERATOR
+
+signal_inputs:
+  - ANNOTATED_CORPUS
+  - EXECUTION_TRACE
+  - ARCHIVE_PACKET
+
+signal_outputs:
+  - ANNOTATED_CORPUS
+  - ARCHIVE_PACKET
+  - VALIDATION_RECORD
+  - STATE_MODEL
+
 produces:
-  - surface-manifest.json
-  - mcp-context.json
-  - surface-bundle.json
-  - corpus-contract.schema.json
-  - surface-manifest.schema.json
-  - mcp-context.schema.json
-  - surface-bundle.schema.json
-  - promotion-policy.schema.json
-  - provider-refresh.schema.json
-  - source-policy.schema.json
-  - corpus-candidate.schema.json
+  - type: surface-manifest
+    signal_class: STATE_MODEL
+    consumers: [META-ORGANVM]
+  - type: mcp-context
+    signal_class: STATE_MODEL
+    consumers: [META-ORGANVM]
+  - type: surface-bundle
+    signal_class: VALIDATION_RECORD
+    consumers: [META-ORGANVM]
+  - type: corpus-contract-schema
+    signal_class: INTERFACE_CONTRACT
+    consumers: [META-ORGANVM]
+  - type: evaluation-scorecard
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
 
 consumes:
-  - provider-exports
+  - type: provider-exports
+    signal_class: ARCHIVE_PACKET
+    source: external
+  - type: governance-rules
+    signal_class: RULE_PROPOSAL
+    source: META-ORGANVM
 
 subscriptions:
-  - governance.updated
-  - schema.registry.sync
+  - event: governance.updated
+    source: META-ORGANVM
+  - event: schema.registry.sync
+    source: META-ORGANVM
