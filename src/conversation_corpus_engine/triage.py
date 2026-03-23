@@ -34,6 +34,23 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _strip_uuid_suffix(local_id: str) -> str:
+    """Strip the trailing 8-hex-char UUID suffix from a slugified ID.
+
+    e.g. 'family-divine-comedy-f22e2b8d' → 'family-divine-comedy'
+    """
+    if len(local_id) < 10:
+        return local_id
+    parts = local_id.rsplit("-", 1)
+    if len(parts) == 2 and len(parts[1]) == 8:
+        try:
+            int(parts[1], 16)
+            return parts[0]
+        except ValueError:
+            pass
+    return local_id
+
+
 def extract_local_ids(subject_ids: list[str]) -> list[tuple[str, str]]:
     """Split subject_ids into (corpus_id, local_id) pairs."""
     pairs: list[tuple[str, str]] = []
@@ -70,6 +87,30 @@ def classify_item(item: dict[str, Any]) -> dict[str, Any] | None:
             "policy": "exact-cross-corpus",
             "canonical_subject": canonical,
         }
+
+    # Policy: slug-match — same title slug, different UUID suffixes across corpora
+    if review_type in {"family-merge", "action-merge", "unresolved-merge"} and len(corpora) >= 2:
+        slugs = [_strip_uuid_suffix(lid) for lid in local_ids]
+        if len(set(slugs)) == 1 and slugs[0]:
+            canonical = item.get("suggested_canonical_subject") or local_ids[0]
+            return {
+                "decision": "accepted",
+                "note": f"Auto-triage: same title slug across {len(corpora)} corpora (UUID suffix differs)",
+                "policy": "slug-match",
+                "canonical_subject": canonical,
+            }
+
+    # Policy: prefix-entity-alias — one entity ID is a prefix of the other
+    if review_type == "entity-alias" and len(local_ids) >= 2:
+        sorted_ids = sorted(local_ids, key=len)
+        if sorted_ids[-1].startswith(sorted_ids[0]) and len(sorted_ids[0]) >= 10:
+            canonical = item.get("suggested_canonical_subject") or sorted_ids[-1]
+            return {
+                "decision": "accepted",
+                "note": "Auto-triage: entity ID prefix match (shorter is subset of longer)",
+                "policy": "prefix-entity-alias",
+                "canonical_subject": canonical,
+            }
 
     # Policy: noise-entity — reject aliases involving noise tokens
     if review_type == "entity-alias":
