@@ -6,6 +6,7 @@ import json
 import shutil
 from collections import Counter
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -231,19 +232,74 @@ def extract_unresolved(sentences: list[str]) -> list[str]:
     return dedupe_preserve(candidates)[:5]
 
 
+SKIP_CONTENT_TYPES = {"user_editable_context", "model_editable_context", "thoughts"}
+
+
 def extract_node_text(node: dict[str, Any]) -> str:
-    """Extract text from a ChatGPT mapping node's message content."""
+    """Extract text from a ChatGPT mapping node's message content.
+
+    Handles text, code, execution_output, multimodal_text, and tool content types.
+    """
     message = node.get("message")
     if not message:
         return ""
     content = message.get("content") or {}
+    content_type = content.get("content_type") or "text"
+    role = ((message.get("author") or {}).get("role") or "").lower()
+
+    if content_type in SKIP_CONTENT_TYPES:
+        return ""
+
     parts = content.get("parts") or []
     segments: list[str] = []
-    for part in parts:
-        if isinstance(part, str):
-            cleaned = normalize_whitespace(part)
-            if cleaned:
-                segments.append(cleaned)
+
+    if content_type == "multimodal_text":
+        for part in parts:
+            if isinstance(part, str):
+                cleaned = normalize_whitespace(part)
+                if cleaned:
+                    segments.append(cleaned)
+            elif isinstance(part, dict):
+                part_type = part.get("content_type", "")
+                if part_type == "text":
+                    cleaned = normalize_whitespace(str(part.get("text", "")))
+                    if cleaned:
+                        segments.append(cleaned)
+                elif part_type == "image_asset_pointer":
+                    w, h = part.get("width"), part.get("height")
+                    size = f"{w}x{h}" if w and h else "unknown"
+                    segments.append(f"[Image: {size}]")
+    elif content_type == "code":
+        raw_text = content.get("text") or " ".join(p for p in parts if isinstance(p, str))
+        lang = content.get("language") or "text"
+        if raw_text.strip():
+            segments.append(f"```{lang}\n{raw_text.strip()}\n```")
+    elif content_type == "execution_output":
+        raw_text = content.get("text") or " ".join(p for p in parts if isinstance(p, str))
+        if raw_text.strip():
+            text = raw_text.strip()
+            if len(text) > 500:
+                text = text[:497] + "..."
+            segments.append(f"[Execution output: {text}]")
+    else:
+        for part in parts:
+            if isinstance(part, str):
+                cleaned = normalize_whitespace(part)
+                if cleaned:
+                    segments.append(cleaned)
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                cleaned = normalize_whitespace(part["text"])
+                if cleaned:
+                    segments.append(cleaned)
+
+    if role == "tool" and not segments:
+        text_field = content.get("text")
+        if isinstance(text_field, str) and text_field.strip():
+            text = text_field.strip()
+            if len(text) > 500:
+                text = text[:497] + "..."
+            segments.append(f"[Tool output: {text}]")
+
     return normalize_whitespace(" ".join(segments))
 
 
@@ -379,6 +435,93 @@ def build_entities(title: str, keywords: list[str]) -> list[dict[str, str]]:
     return result
 
 
+def build_thread_audit(
+    mapping: dict[str, Any],
+    nodes: list[dict[str, Any]],
+    extracted_texts: list[str],
+    pairs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build per-thread audit statistics: role/content_type counts, retention, quality flags."""
+    raw_role_counts: Counter[str] = Counter()
+    raw_content_type_counts: Counter[str] = Counter()
+    for node in mapping.values():
+        message = node.get("message") or {}
+        role = ((message.get("author") or {}).get("role")) or "none"
+        ct = (message.get("content") or {}).get("content_type") or "none"
+        raw_role_counts[role] += 1
+        raw_content_type_counts[ct] += 1
+
+    path_role_counts: Counter[str] = Counter()
+    skipped_count = 0
+    empty_render_count = 0
+    for node in nodes:
+        message = node.get("message") or {}
+        role = ((message.get("author") or {}).get("role")) or "none"
+        path_role_counts[role] += 1
+        text = extract_node_text(node)
+        if not text:
+            skipped_count += 1
+            ct = (message.get("content") or {}).get("content_type") or "none"
+            if ct not in SKIP_CONTENT_TYPES and role != "system":
+                empty_render_count += 1
+
+    retained = len(extracted_texts)
+    retention_ratio = round(retained / len(nodes), 4) if nodes else 0.0
+
+    flags: list[str] = []
+    if retention_ratio < 0.65 and len(nodes) > 4:
+        flags.append("low_retention")
+    if empty_render_count > 5:
+        flags.append("high_empty_render")
+    if any(not p.get("summary", "").strip() for p in pairs):
+        flags.append("pair_without_response")
+
+    return {
+        "mapping_node_count": len(mapping),
+        "path_node_count": len(nodes),
+        "retained_count": retained,
+        "skipped_count": skipped_count,
+        "empty_render_count": empty_render_count,
+        "retention_ratio": retention_ratio,
+        "raw_role_counts": dict(raw_role_counts),
+        "raw_content_type_counts": dict(raw_content_type_counts),
+        "path_role_counts": dict(path_role_counts),
+        "quality_flags": flags,
+    }
+
+
+def detect_near_duplicates(
+    threads: list[dict[str, Any]],
+    first_prompts: dict[str, str],
+    *,
+    threshold: float = 0.92,
+) -> list[dict[str, Any]]:
+    """Detect near-duplicate threads by comparing first user prompts."""
+    candidates: list[dict[str, Any]] = []
+    uids = [t["thread_uid"] for t in threads]
+    for i in range(len(uids)):
+        prompt_a = first_prompts.get(uids[i], "")
+        if len(prompt_a) < 20:
+            continue
+        for j in range(i + 1, len(uids)):
+            prompt_b = first_prompts.get(uids[j], "")
+            if len(prompt_b) < 20:
+                continue
+            ratio = SequenceMatcher(None, prompt_a[:500], prompt_b[:500]).ratio()
+            if ratio >= threshold:
+                candidates.append(
+                    {
+                        "thread_uids": [uids[i], uids[j]],
+                        "similarity": round(ratio, 4),
+                        "titles": [
+                            threads[i].get("title_normalized", ""),
+                            threads[j].get("title_normalized", ""),
+                        ],
+                    }
+                )
+    return candidates
+
+
 def copy_bundle_files(bundle_root: Path, output_root: Path) -> list[str]:
     copied: list[str] = []
     source_root = output_root / "source"
@@ -418,6 +561,8 @@ def import_chatgpt_export_corpus(
     unresolved: list[dict[str, Any]] = []
     import_manifest: list[dict[str, Any]] = []
     entity_map: dict[str, dict[str, Any]] = {}
+    thread_audits: list[dict[str, Any]] = []
+    first_prompts: dict[str, str] = {}
 
     imported_conversation_count = 0
     empty_conversation_count = 0
@@ -456,6 +601,21 @@ def import_chatgpt_export_corpus(
         for pair in pair_items:
             pair["entities"] = semantic_entities
         pairs.extend(pair_items)
+
+        audit = build_thread_audit(mapping, nodes, extracted_texts, pair_items)
+        audit["thread_uid"] = thread_uid
+        thread_audits.append(audit)
+
+        first_user = next(
+            (
+                extract_node_text(n)
+                for n in nodes
+                if ((n.get("message") or {}).get("author") or {}).get("role") == "user"
+                and extract_node_text(n)
+            ),
+            "",
+        )
+        first_prompts[thread_uid] = first_user
 
         action_items = [
             {
@@ -500,7 +660,7 @@ def import_chatgpt_export_corpus(
                 "semantic_v3_summary": f"{title} imported ChatGPT conversation centered on {', '.join(keywords[:4])}.",
                 "action_count": len(action_items),
                 "unresolved_question_count": len(unresolved_items),
-                "audit_flags": [],
+                "audit_flags": audit.get("quality_flags", []),
                 "thread_path": str(output_root / "source" / "conversations.json"),
                 "family_ids": [family_id],
                 "update_time_iso": update_time,
@@ -591,6 +751,8 @@ def import_chatgpt_export_corpus(
         if entity.get("aliases")
     ]
 
+    near_duplicates = detect_near_duplicates(threads, first_prompts)
+
     corpus_dir = output_root / "corpus"
     source_snapshot = build_source_snapshot(bundle_root, "chatgpt-export", "bundle-json")
     write_json(corpus_dir / "threads-index.json", threads)
@@ -604,6 +766,9 @@ def import_chatgpt_export_corpus(
     write_json(corpus_dir / "canonical-entities.json", entities)
     write_json(corpus_dir / "entity-aliases.json", entity_aliases)
     write_json(corpus_dir / "doctrine-timeline.json", [])
+    write_json(corpus_dir / "import-audit.json", thread_audits)
+    if near_duplicates:
+        write_json(corpus_dir / "near-duplicates.json", near_duplicates)
     write_json(corpus_dir / "source-snapshot.json", source_snapshot)
     write_json(
         corpus_dir / "contract.json",
@@ -630,6 +795,8 @@ def import_chatgpt_export_corpus(
                 "entities": len(entities),
                 "users": 1 if user else 0,
                 "empty_conversations": empty_conversation_count,
+                "near_duplicates": len(near_duplicates),
+                "flagged_threads": sum(1 for a in thread_audits if a.get("quality_flags")),
             },
             "source_input": str(bundle_root),
             "collection_scope": "bundle-json",
@@ -692,6 +859,8 @@ def import_chatgpt_export_corpus(
         "action_count": len(actions),
         "unresolved_count": len(unresolved),
         "empty_conversation_count": empty_conversation_count,
+        "near_duplicate_count": len(near_duplicates),
+        "flagged_thread_count": sum(1 for a in thread_audits if a.get("quality_flags")),
         "manifest_path": str(output_root / "import-manifest.json"),
         "readme_path": str(output_root / "README.md"),
     }
