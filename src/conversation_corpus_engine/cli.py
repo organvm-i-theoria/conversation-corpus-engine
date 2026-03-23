@@ -12,6 +12,7 @@ from .corpus_candidates import (
     rollback_corpus_promotion,
     stage_corpus_candidate,
 )
+from .dashboard import build_dashboard, render_dashboard_text
 from .evaluation import run_corpus_evaluation
 from .evaluation_bootstrap import bootstrap_provider_evaluation
 from .federated_canon import (
@@ -394,6 +395,11 @@ def build_parser() -> argparse.ArgumentParser:
     source_freshness = source_sub.add_parser("freshness", help="Compute corpus source freshness")
     source_freshness.add_argument("corpus_root", type=Path)
 
+    dashboard = subparsers.add_parser("dashboard", help="Operator-facing health summary")
+    dashboard.add_argument("--project-root", type=Path, default=default_project_root())
+    dashboard.add_argument("--source-drop-root", type=Path)
+    dashboard.add_argument("--json", action="store_true")
+
     return parser
 
 
@@ -762,6 +768,17 @@ def main() -> None:
     if args.group == "source" and args.action == "freshness":
         result = compute_source_freshness(args.corpus_root)
         print(json.dumps(result, indent=2))
+        return
+
+    if args.group == "dashboard":
+        source_drop_root = getattr(args, "source_drop_root", None) or default_source_drop_root(
+            args.project_root
+        )
+        payload = build_dashboard(args.project_root, source_drop_root)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+            return
+        print(render_dashboard_text(payload))
         return
 
     parser.error("unsupported command")
