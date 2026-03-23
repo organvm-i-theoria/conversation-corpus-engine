@@ -1,120 +1,90 @@
 # CLAUDE.md
 
-Project-specific guidance for Claude Code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What This Is
 
-**conversation-corpus-engine** is the canonical ORGAN-I ENGINE for multi-provider AI conversation memory. It owns provider import, corpus validation, evaluation, federation, governance policy, and Meta/MCP surface exports.
+Canonical ENGINE for multi-provider AI conversation memory. Functional class: ENGINE. Formation type: GENERATOR. Signal signature: `(Σ,Π,Θ) → (Σ,Π,Ω,Δ)`. Zero runtime dependencies beyond stdlib.
 
-- GitHub: `organvm-i-theoria/conversation-corpus-engine`
-- Organ: ORGAN-I (Theoria)
-- Functional class: ENGINE
-- Tier: standard
-- Promotion status: GRADUATED
+Owns: provider import, corpus validation, evaluation, federation, governance policy, Meta/MCP surface exports.
 
-## Deployment Site
+Sibling deployment site: `../conversation-corpus-site/` (RESERVOIR, FORM-RES-001, not git). 5 live corpora, 744 federated families, 3,542 actions. ChatGPT is the genesis provider (55-thread corpus with manual gold fixtures, all gates pass).
 
-The engine operates on a deployment site that lives alongside it:
+## Constitutional Context
 
-```
-organvm-i-theoria/
-├── conversation-corpus-engine/     ← THIS REPO (code)
-└── conversation-corpus-site/       ← DEPLOYMENT SITE (data, not git)
-    ├── .cce-env                    ← sets CCE_PROJECT_ROOT + CCE_SOURCE_DROP_ROOT
-    ├── formation.yaml              ← FORM-RES-001, type RESERVOIR, host ORGAN-I
-    ├── state/                      ← registry, policies, federation state
-    ├── federation/                 ← federated outputs
-    ├── reports/                    ← surfaces, readiness
-    ├── source-drop/                ← provider inboxes
-    ├── chatgpt-history/            ← corpus (genesis, 55 threads, 9 families)
-    ├── claude-local-session-memory/ ← corpus (351 threads)
-    ├── claude-history-memory/       ← corpus (351 threads)
-    ├── brainstorm-transcript-memory/ ← corpus
-    ├── ai-exports-markdown-memory/  ← corpus
-    └── archive/legacy-scripts/     ← 84 retired scripts from staging ancestor
-```
+This repo exists within a system transitioning from numbered organs to named functions (SPEC-019). The current state:
 
-To operate: `export $(cat ../conversation-corpus-site/.cce-env | grep -v '^#' | xargs)`
-
-## Constitutional Placement
-
-Per the Post-Flood Constitutional Order (2026-03-21):
-- **META is genome (law), Theoria is knowledge AND memory**
-- Placement is by physiological role (Formation Charter §7.2), not dependency rank
-- The engine is an ENGINE in ORGAN-I; the site is a RESERVOIR in ORGAN-I
-- Proof: `post-flood/specs/PROOF-reservoir-placement.md`
+- **Placement:** Theoria (knowledge AND memory). META is genome (law only). Proof: `post-flood/specs/PROOF-reservoir-placement.md`
+- **Direction:** SPEC-019 System Manifestation defines the liquid model — formations declare function participation (`participates_in`) rather than organ ownership. Signal composability via set intersection. Mneme (memory) is the 8th physiological function.
+- **Signal vocabulary:** 14 post-flood classes per Formation Protocol §8.1. Greek letter variables: Σ=ANNOTATED_CORPUS, Π=ARCHIVE_PACKET, Θ=EXECUTION_TRACE, Ω=VALIDATION_RECORD, Δ=STATE_MODEL, Λ=RULE_PROPOSAL, Ι=INTERFACE_CONTRACT. See `seed.yaml` for this repo's full signal I/O.
+- **Reservoir Law:** RESERVOIR formations cannot emit ONT_FRAGMENT (Φ) or RULE_PROPOSAL (Λ). The site obeys this; the engine enforces it.
+- **Functional class is orthogonal to organ.** Do not use the dependency DAG (I→II→III) to decide where knowledge lives — use the information graph (E^info), which is constitutionally cyclic.
 
 ## Commands
 
 ```bash
-# Install
 pip install -e ".[dev]"
 
-# Test
+# Tests
 python -m pytest tests/ -v
-python -m pytest tests/test_specific.py::ClassName::test_name -v
+python -m pytest tests/test_file.py::ClassName::test_name -v   # single test
 
-# Lint
+# Lint + format (both required — CI runs both)
 pipx run ruff check src/ tests/
 pipx run ruff format --check src/ tests/
 
-# CLI (with site env loaded)
+# Operate against the deployment site
+export $(cat ../conversation-corpus-site/.cce-env | grep -v '^#' | xargs)
 cce corpus list
-cce provider discover
 cce provider readiness --write
-cce provider import --provider chatgpt --source-path /path/to/export
-cce provider refresh --provider claude --promote
-cce schema list
-cce schema validate corpus-contract --path /path/to/contract.json
 cce surface bundle
 cce evaluation run --root /path/to/corpus --seed --json
-cce review queue
 ```
 
 ## Architecture
 
-- `src/conversation_corpus_engine/` — 29 modules, flat structure
-- `src/conversation_corpus_engine/schemas/` — 8 JSON Schema contracts (bundled with package)
-- `tests/` — 49 tests, unittest + pytest, `tempfile.TemporaryDirectory` isolation
-- `tests/fixtures/` — sanitized export fixtures (ChatGPT)
-- `tests/conftest.py` — shared corpus seeding and inbox helpers
+29 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 8 JSON schemas in `schemas/`.
 
-### Provider Adapter Pattern
+### Module Relationships
 
-6 providers: ChatGPT, Claude, Gemini, Grok, Perplexity, Copilot.
+`answering.py` is the shared utility layer — `load_json`, `write_json`, `write_markdown`, `slugify`, `tokenize`, `search_documents_v4`, `build_answer`. Nearly every other module imports from it.
 
-Each provider has:
-1. An entry in `provider_catalog.py` `PROVIDER_CONFIG` dict
-2. A detection function in `provider_exports.py`
-3. An import module (`import_*_corpus.py`) producing federation-compatible corpus artifacts
-4. Wiring in `provider_import.py` to route the provider to its adapter
-5. CLI choices in `cli.py`
+`provider_catalog.py` defines `PROVIDER_CONFIG` (6 providers). `provider_discovery.py` scans source-drop inboxes using detection functions from `provider_exports.py`. `provider_import.py` routes each provider to its adapter and orchestrates import → bootstrap eval → register → federation build.
 
-Adapter routing:
-- ChatGPT → `import_chatgpt_export_corpus.py` (conversations.json mapping tree)
-- Claude upload → `import_claude_export_corpus.py` (conversations.json + users.json bundle)
-- Claude local → `import_claude_local_session_corpus.py` (Application Support)
-- All others → `import_document_export_corpus.py` (generic multi-format: md/html/json/csv/zip)
+Import adapters produce identical corpus artifact sets (threads-index, pairs-index, doctrine-briefs, canonical-families, etc.):
+- `import_chatgpt_export_corpus.py` — walks ChatGPT `mapping` tree (parent/children pointers), linearizes by `create_time`
+- `import_claude_export_corpus.py` — parses Claude `conversations.json` + `users.json` bundle
+- `import_claude_local_session_corpus.py` — reads from `~/Library/Application Support/Claude`
+- `import_document_export_corpus.py` — generic multi-format (md/html/json/csv/zip) → normalizes to markdown → delegates to `import_markdown_document_corpus.py`
 
-ChatGPT is the genesis provider. The adapter type `chatgpt-history` is recognized as an alias for `chatgpt-export` (backward compat with the 55-thread live corpus).
+`evaluation.py` runs seeded/manual gold fixtures through regression gates (8 metric thresholds). `federation.py` materializes cross-corpus federated indices. `surface_exports.py` assembles everything into META-facing manifests validated against the bundled schemas.
 
-### Signal Flow
+`corpus_candidates.py` and `governance_candidates.py` implement parallel stage→review→promote→rollback workflows for corpus data and policy thresholds respectively.
 
-```
-Provider exports → source-drop inboxes → cce provider import → corpus artifacts
-→ cce evaluation run → regression gates → cce federation build → federated index
-→ cce surface bundle → surface-manifest.json + mcp-context.json
-→ META consumers: schema-definitions → organvm-engine → organvm-mcp-server → agents
-```
+### Adding a Provider
+
+1. Add entry to `PROVIDER_CONFIG` in `provider_catalog.py`
+2. Add detection function in `provider_exports.py` (e.g., `looks_like_X_export`)
+3. Wire detection mode in `provider_discovery.py:summarize_provider()`
+4. Create `import_X_export_corpus.py` (follow `import_chatgpt_export_corpus.py` pattern)
+5. Add routing in `provider_import.py` (module-level import, branch in `resolve_provider_import_source` and `import_provider_corpus`)
+6. Add to all `choices=[...]` in `cli.py` (6 occurrences)
+
+### Pre-commit Hook
+
+A gitleaks secret scanner runs on commit. Dict comprehensions with `token:` keys trigger false positives. Place `# allow-secret` on the line containing `token:`, not on the `for` clause — ruff format moves comments to the `for` line but the scanner checks the `token:` line.
 
 ## Environment Variables
 
-- `CCE_PROJECT_ROOT` — project root (default: repo root; production: ../conversation-corpus-site/)
+- `CCE_PROJECT_ROOT` — project root (default: repo root; production: `../conversation-corpus-site/`)
 - `CCE_SOURCE_DROP_ROOT` — source-drop inbox location
 
 ## Conventions
 
-- Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`
-- Python: PEP 8, type hints, ruff linting, unittest + pytest
-- No external runtime dependencies (stdlib only for core engine)
-- Signal vocabulary: 14 post-flood classes per Formation Protocol §8.1
+- Conventional Commits with imperative mood
+- stdlib only for runtime — `pytest` and `ruff` are dev-only
+- `COM812` is ignored in ruff lint (conflicts with ruff formatter)
+- Tests use `unittest.TestCase` + `tempfile.TemporaryDirectory`; shared helpers in `tests/conftest.py`
+- ChatGPT is the genesis provider — adapter type `chatgpt-history` aliased to `chatgpt-export` for backward compat
+- Signal vocabulary: 14 post-flood classes (see `seed.yaml` for this repo's signal I/O)
+- The system is transitioning to one-org flat hierarchy with `--` naming (identity--role). This repo's future name: `conversation-corpus--engine`
