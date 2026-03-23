@@ -56,6 +56,7 @@ from .surface_exports import (
     write_mcp_context_artifacts,
     write_surface_manifest_artifacts,
 )
+from .triage import build_triage_plan, execute_triage_plan
 
 
 def parse_threshold_overrides(values: list[str] | None) -> dict[str, float]:
@@ -389,6 +390,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_resolve.add_argument("--note", required=True)
     review_resolve.add_argument("--canonical-subject")
+    review_triage = review_sub.add_parser("triage", help="Auto-resolve review items by policy")
+    review_triage.add_argument("--project-root", type=Path, default=default_project_root())
+    review_triage.add_argument("--execute", action="store_true", help="Apply the triage plan")
+    review_triage.add_argument("--json", action="store_true")
 
     source = subparsers.add_parser("source", help="Inspect source freshness")
     source_sub = source.add_subparsers(dest="action", required=True)
@@ -763,6 +768,35 @@ def main() -> None:
             canonical_subject=args.canonical_subject,
         )
         print(json.dumps(result, indent=2))
+        return
+
+    if args.group == "review" and args.action == "triage":
+        plan = build_triage_plan(args.project_root)
+        if args.execute:
+            result = execute_triage_plan(args.project_root, plan)
+            payload = {**plan, "execution": result}
+        else:
+            payload = plan
+        if args.json:
+            print(json.dumps(payload, indent=2))
+            return
+        s = payload["summary"]
+        print(f"Review queue triage: {payload['total_open']} open items")
+        print(f"  Auto-resolvable: {payload['auto_resolvable']}")
+        print(f"    Accept: {s['accepted']}  Reject: {s['rejected']}  Defer: {s['deferred']}")
+        print(f"  Requires manual: {s['manual']}")
+        for policy, count in sorted(payload.get("policy_counts", {}).items()):
+            print(f"  Policy {policy}: {count}")
+        if args.execute:
+            ex = payload.get("execution", {})
+            print(
+                f"\nExecuted: {ex.get('resolved', 0)} resolved, {ex.get('remaining_open', '?')} remaining"
+            )
+            if ex.get("errors"):
+                for err in ex["errors"][:5]:
+                    print(f"  Error: {err}")
+        elif payload["auto_resolvable"] > 0:
+            print("\nRun with --execute to apply.")
         return
 
     if args.group == "source" and args.action == "freshness":
