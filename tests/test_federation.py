@@ -419,6 +419,70 @@ class MemoryFederationTests(unittest.TestCase):
                 decisions["accepted_family_merges"][0]["canonical_subject"], "shared-doctrine"
             )
 
+    def test_build_federation_suppresses_low_signal_single_token_entity_alias_reviews(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            second_root = Path(tmpdir) / "notes-corpus"
+            self.seed_corpus(
+                project_root,
+                corpus_title="Alpha Corpus",
+                family_id="family-alpha",
+                thread_uid="thread-alpha",
+                query_terms=["alpha", "registry", "governance"],
+                action_key="action-alpha",
+                question_key="question-alpha",
+            )
+            self.seed_corpus(
+                second_root,
+                corpus_title="Beta Corpus",
+                family_id="family-beta",
+                thread_uid="thread-beta",
+                query_terms=["beta", "orchard", "blueprint"],
+                action_key="action-beta",
+                question_key="question-beta",
+            )
+            (project_root / "corpus" / "canonical-entities.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "canonical_entity_id": "entity-system-a",
+                            "canonical_label": "System",
+                            "entity_type": "concept",
+                            "aliases": ["Alpha Corpus"],
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (second_root / "corpus" / "canonical-entities.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "canonical_entity_id": "entity-system-b",
+                            "canonical_label": "System",
+                            "entity_type": "concept",
+                            "aliases": ["Beta Corpus"],
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            MODULE.upsert_corpus(
+                project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
+            )
+            MODULE.build_federation(project_root)
+            review_queue = json.loads(
+                (project_root / "federation" / "review-queue.json").read_text()
+            )
+
+            self.assertFalse(
+                any(
+                    item["review_type"] == "entity-alias" and item["title"] == "System <> System"
+                    for item in review_queue["items"]
+                )
+            )
+
     def test_query_federation_index_filters_by_corpus_and_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"

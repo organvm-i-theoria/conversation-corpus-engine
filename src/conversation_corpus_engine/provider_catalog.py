@@ -115,8 +115,12 @@ def provider_corpus_targets(
 ) -> list[dict[str, Any]]:
     config = get_provider_config(provider)
     registry_by_id = {item["corpus_id"]: item for item in registry or []}
+    registry_roots = {
+        str(Path(item["root"]).resolve()) for item in registry or [] if item.get("root")
+    }
     policy = load_source_policy(project_root, provider)
     targets: list[dict[str, Any]] = []
+    explicit_primary = bool(policy.get("primary_corpus_id") or policy.get("primary_root"))
 
     primary_corpus_id = policy.get("primary_corpus_id") or config["default_corpus_id"]
     primary_corpus_name = config["default_corpus_name"]
@@ -161,6 +165,20 @@ def provider_corpus_targets(
                 "policy": policy or None,
             },
         )
+    if not explicit_primary and len(targets) == 2:
+        primary_root_path = Path(targets[0]["root"]).resolve()
+        fallback_root_path = Path(targets[1]["root"]).resolve()
+        primary_viable = primary_root_path.exists() and (
+            (primary_root_path / "corpus" / "contract.json").exists()
+            or str(primary_root_path) in registry_roots
+        )
+        fallback_viable = fallback_root_path.exists() and (
+            (fallback_root_path / "corpus" / "contract.json").exists()
+            or str(fallback_root_path) in registry_roots
+        )
+        if not primary_viable and fallback_viable:
+            targets[0]["selected"] = False
+            targets[1]["selected"] = True
     if targets:
         return targets
     return []

@@ -97,6 +97,29 @@ class ProviderReadinessTests(unittest.TestCase):
             self.assertIn("cce provider refresh --provider perplexity", readiness["next_command"])
             self.assertEqual(len(corpora), 1)
 
+    def test_build_provider_readiness_prefers_registered_chatgpt_fallback_when_default_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            source_drop_root = Path(tmpdir) / "source-drop"
+            chatgpt_root = source_drop_root.parent / "chatgpt-history"
+
+            seed_valid_corpus(chatgpt_root, adapter_type="chatgpt-history")
+            upsert_corpus(
+                project_root,
+                chatgpt_root,
+                corpus_id="chatgpt-history",
+                name="ChatGPT History",
+            )
+
+            payload = build_provider_readiness(project_root, source_drop_root)
+            readiness = next(item for item in payload["providers"] if item["provider"] == "chatgpt")
+
+            self.assertEqual(readiness["overall_state"], "healthy-federation")
+            self.assertEqual(readiness["selected_target"]["corpus_id"], "chatgpt-history")
+            self.assertEqual(readiness["next_command"], "ready")
+
 
 if __name__ == "__main__":
     unittest.main()

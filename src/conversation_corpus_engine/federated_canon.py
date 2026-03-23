@@ -71,6 +71,16 @@ def jaccard(left: set[str], right: set[str]) -> float:
     return round(overlap / union, 4) if union else 0.0
 
 
+def suppress_low_signal_entity_alias(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_label = normalize_label(left.get("canonical_label") or "")
+    right_label = normalize_label(right.get("canonical_label") or "")
+    if not left_label or left_label != right_label:
+        return False
+    if left.get("entity_type") != "concept" or right.get("entity_type") != "concept":
+        return False
+    return len(left_label.split()) <= 1
+
+
 def decision_subject_key(subject_ids: list[str]) -> str:
     return "::".join(sorted(set(subject_ids)))
 
@@ -477,6 +487,8 @@ def build_pair_suggestions(
             subject_ids = sorted([left["member_id"], right["member_id"]])
             pair_key = decision_subject_key(subject_ids)
             if pair_key in accepted or pair_key in rejected:
+                continue
+            if review_type == "entity-alias" and suppress_low_signal_entity_alias(left, right):
                 continue
             score = similarity_fn(left, right)
             if score < threshold:
