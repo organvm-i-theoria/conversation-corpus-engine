@@ -639,15 +639,16 @@ def rerank_family_hits(
     matched_family_ids: set[str],
 ) -> list[dict[str, Any]]:
     lower_query = query.lower().strip()
+    max_base_score = max((item.get("score", 0.0) for item in family_hits), default=0.0)
     reranked: list[dict[str, Any]] = []
     for item in family_hits:
         raw_support = lexical_support_for_tokens(raw_query_tokens, item)
         title = (item.get("title") or "").lower().strip()
         matched_bonus = 0.0
         if item.get("family_id") in matched_family_ids:
-            matched_bonus = 2.5
+            matched_bonus = max(2.5, max_base_score * 0.6)
             if title == lower_query:
-                matched_bonus += 0.8
+                matched_bonus = max(matched_bonus + 0.8, max_base_score + 2.0)
         score = round(item.get("score", 0.0) + matched_bonus + (0.45 * raw_support), 4)
         result = dict(item)
         diagnostics = dict(item.get("diagnostics", {}))
@@ -745,6 +746,13 @@ def search_documents_v4(
         limit=max(limit, 6),
         kind_multiplier=family_kind_multiplier,
     )
+    if matched_family_ids:
+        hit_family_ids = {h.get("family_id") for h in family_hits if h.get("family_id")}
+        for doc in corpus["family_docs"]:
+            fid = doc.get("family_id")
+            if fid in matched_family_ids and fid not in hit_family_ids:
+                family_hits.append({**doc, "score": 0.0, "diagnostics": {}, "snippet": ""})
+                hit_family_ids.add(fid)
     family_hits = rerank_family_hits(query, raw_query_tokens, family_hits, matched_family_ids)
     top_family_scores: dict[str, float] = {}
     for item in family_hits[:4]:
