@@ -80,6 +80,26 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
             "Current Copilot ingestion targets exported conversation bundles, not IDE extension traces.",
         ],
     },
+    "deepseek": {
+        "display_name": "DeepSeek",
+        "adapter_state": "supported",
+        "adapter_type": "deepseek-export",
+        "discovery_mode": "document-export",
+        "inbox_rel": "deepseek/inbox",
+        "default_corpus_id": "deepseek-history-memory",
+        "default_corpus_name": "DeepSeek History Memory",
+        "calibration_only": True,
+    },
+    "mistral": {
+        "display_name": "Mistral",
+        "adapter_state": "supported",
+        "adapter_type": "mistral-export",
+        "discovery_mode": "document-export",
+        "inbox_rel": "mistral/inbox",
+        "default_corpus_id": "mistral-history-memory",
+        "default_corpus_name": "Mistral History Memory",
+        "calibration_only": True,
+    },
 }
 
 

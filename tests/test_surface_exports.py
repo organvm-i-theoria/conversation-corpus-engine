@@ -140,7 +140,7 @@ class SurfaceExportsTests(unittest.TestCase):
 
             self.assertEqual(manifest["registry"]["default_corpus_id"], "perplexity-history-memory")
             self.assertEqual(context["summary"]["active_corpus_count"], 1)
-            self.assertEqual(context["summary"]["provider_count"], 6)
+            self.assertEqual(context["summary"]["provider_count"], 8)
             self.assertTrue(bundle["summary"]["valid"])
             self.assertTrue(manifest_result["valid"], manifest_result["errors"])
             self.assertTrue(context_result["valid"], context_result["errors"])
