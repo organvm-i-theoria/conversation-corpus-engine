@@ -20,10 +20,19 @@ This repo exists within a system transitioning from numbered organs to named fun
 - **Reservoir Law:** RESERVOIR formations cannot emit ONT_FRAGMENT (Φ) or RULE_PROPOSAL (Λ). The site obeys this; the engine enforces it.
 - **Functional class is orthogonal to organ.** Do not use the dependency DAG (I→II→III) to decide where knowledge lives — use the information graph (E^info), which is constitutionally cyclic.
 
+## Install
+
+```bash
+# Global install via pipx (from GitHub — no PyPI needed)
+pipx install git+https://github.com/organvm-i-theoria/conversation-corpus-engine.git
+
+# Development install (editable with test/lint deps)
+pip install -e ".[dev]"
+```
+
 ## Commands
 
 ```bash
-pip install -e ".[dev]"
 
 # Tests
 python -m pytest tests/ -v
