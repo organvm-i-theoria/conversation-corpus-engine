@@ -65,17 +65,18 @@ cce source-policy  show | set | history    # per-provider source authority
 cce policy      show | replay | stage | review | apply | rollback  # promotion thresholds
 cce candidate   show | history | stage | review | promote | rollback  # corpus candidates
 cce evaluation  run                        # regression gate evaluation
-cce review      queue | history | resolve  # federated human-review queue
+cce review      queue | history | resolve | triage  # federated review queue + auto-triage
 cce source      freshness                  # source staleness check
+cce dashboard                              # operator-facing health summary
 ```
 
 **`provider refresh`** is the primary operational workflow — orchestrates import → bootstrap eval → run eval → stage candidate → (optionally) review → promote in a single command. Use `--approve --promote` for end-to-end auto-promote.
 
-Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`. Claude also supports `--mode local-session` (reads from `~/Library/Application Support/Claude`).
+Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deepseek`, `mistral`. Claude also supports `--mode local-session` (reads from `~/Library/Application Support/Claude`).
 
 ## Architecture
 
-30 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 8 JSON schemas bundled as package data in `src/conversation_corpus_engine/schemas/`.
+32 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 8 JSON schemas bundled as package data in `src/conversation_corpus_engine/schemas/`.
 
 ### Project Root Directories
 
@@ -107,6 +108,8 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`. Claud
 **Federation:** `federation.py` materializes cross-corpus indices. `federated_canon.py` manages the human review queue (5 review types: entity-alias, family-merge, action-merge, unresolved-merge, contradiction).
 
 **Schema validation:** `schema_validation.py` implements a stdlib-only JSON Schema validator (no `jsonschema` dependency) supporting type checks, required properties, const/enum, nested objects, and arrays. `surface_exports.py` assembles META-facing manifests validated against these schemas.
+
+**Operator tools:** `dashboard.py` aggregates corpora gates, federation stats, review queue, and provider readiness into a single `cce dashboard` view. `triage.py` provides policy-driven auto-resolution of federated review items — 5 policies: exact-cross-corpus, slug-match, prefix-entity-alias, noise-entity, contradiction-defer.
 
 ### Evaluation Gates
 
