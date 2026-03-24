@@ -136,5 +136,141 @@ class ChatGPTProviderIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(result["import_result"]["thread_count"], 2)
 
 
+from conversation_corpus_engine.import_chatgpt_export_corpus import (  # noqa: E402
+    build_thread_audit,
+    detect_near_duplicates,
+    extract_node_text,
+)
+
+
+class ExtractNodeTextTests(unittest.TestCase):
+    def _node(self, content: dict, role: str = "assistant") -> dict:
+        return {"message": {"author": {"role": role}, "content": content}}
+
+    def test_extracts_plain_text(self) -> None:
+        node = self._node({"parts": ["hello world"], "content_type": "text"})
+        self.assertEqual(extract_node_text(node), "hello world")
+
+    def test_extracts_code_block(self) -> None:
+        node = self._node(
+            {"content_type": "code", "text": "print(1)", "language": "python", "parts": []}
+        )
+        result = extract_node_text(node)
+        self.assertIn("```python", result)
+        self.assertIn("print(1)", result)
+
+    def test_extracts_execution_output(self) -> None:
+        node = self._node({"content_type": "execution_output", "text": "42\n", "parts": []})
+        result = extract_node_text(node)
+        self.assertIn("[Execution output:", result)
+        self.assertIn("42", result)
+
+    def test_truncates_long_execution_output(self) -> None:
+        node = self._node({"content_type": "execution_output", "text": "x" * 600, "parts": []})
+        result = extract_node_text(node)
+        self.assertIn("...", result)
+        self.assertLess(len(result), 600)
+
+    def test_handles_multimodal_with_image(self) -> None:
+        node = self._node(
+            {
+                "content_type": "multimodal_text",
+                "parts": [
+                    "Check this out",
+                    {"content_type": "image_asset_pointer", "width": 800, "height": 600},
+                ],
+            }
+        )
+        result = extract_node_text(node)
+        self.assertIn("Check this out", result)
+        self.assertIn("[Image: 800x600]", result)
+
+    def test_skips_editable_context(self) -> None:
+        node = self._node({"content_type": "user_editable_context", "parts": ["system prompt"]})
+        self.assertEqual(extract_node_text(node), "")
+
+    def test_skips_thoughts(self) -> None:
+        node = self._node({"content_type": "thoughts", "parts": ["internal reasoning"]})
+        self.assertEqual(extract_node_text(node), "")
+
+    def test_tool_output_fallback(self) -> None:
+        node = self._node(
+            {"content_type": "text", "text": "tool result data", "parts": []}, role="tool"
+        )
+        result = extract_node_text(node)
+        self.assertIn("tool result data", result)
+
+    def test_empty_message_returns_empty(self) -> None:
+        self.assertEqual(extract_node_text({}), "")
+        self.assertEqual(extract_node_text({"message": None}), "")
+
+
+class BuildThreadAuditTests(unittest.TestCase):
+    def test_produces_audit_with_quality_flags(self) -> None:
+        mapping = {
+            "n1": {
+                "message": {
+                    "author": {"role": "user"},
+                    "content": {"content_type": "text", "parts": ["hi"]},
+                }
+            },
+            "n2": {
+                "message": {
+                    "author": {"role": "assistant"},
+                    "content": {"content_type": "text", "parts": ["hello"]},
+                }
+            },
+            "n3": {
+                "message": {
+                    "author": {"role": "system"},
+                    "content": {"content_type": "text", "parts": ["sys"]},
+                }
+            },
+        }
+        nodes = [mapping["n1"], mapping["n2"]]
+        audit = build_thread_audit(mapping, nodes, ["hi", "hello"], [])
+        self.assertEqual(audit["mapping_node_count"], 3)
+        self.assertEqual(audit["path_node_count"], 2)
+        self.assertEqual(audit["retained_count"], 2)
+        self.assertGreater(audit["retention_ratio"], 0)
+        self.assertIsInstance(audit["quality_flags"], list)
+
+
+class DetectNearDuplicatesTests(unittest.TestCase):
+    def test_detects_identical_prompts(self) -> None:
+        threads = [
+            {"thread_uid": "t1", "title_normalized": "Chat A"},
+            {"thread_uid": "t2", "title_normalized": "Chat B"},
+        ]
+        prompts = {
+            "t1": "Please help me build a recursive engine for symbolic computing",
+            "t2": "Please help me build a recursive engine for symbolic computing",
+        }
+        result = detect_near_duplicates(threads, prompts)
+        self.assertEqual(len(result), 1)
+        self.assertGreaterEqual(result[0]["similarity"], 0.92)
+
+    def test_ignores_short_prompts(self) -> None:
+        threads = [
+            {"thread_uid": "t1", "title_normalized": "A"},
+            {"thread_uid": "t2", "title_normalized": "B"},
+        ]
+        prompts = {"t1": "hi", "t2": "hi"}
+        result = detect_near_duplicates(threads, prompts)
+        self.assertEqual(len(result), 0)
+
+    def test_no_duplicates_for_different_prompts(self) -> None:
+        threads = [
+            {"thread_uid": "t1", "title_normalized": "A"},
+            {"thread_uid": "t2", "title_normalized": "B"},
+        ]
+        prompts = {
+            "t1": "Build a chess engine with neural network evaluation",
+            "t2": "Design a garden irrigation system with soil sensors",
+        }
+        result = detect_near_duplicates(threads, prompts)
+        self.assertEqual(len(result), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

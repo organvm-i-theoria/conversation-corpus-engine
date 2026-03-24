@@ -100,8 +100,8 @@ def classify_item(item: dict[str, Any]) -> dict[str, Any] | None:
                 "canonical_subject": canonical,
             }
 
-    # Policy: prefix-entity-alias — one entity ID is a prefix of the other
-    if review_type == "entity-alias" and len(local_ids) >= 2:
+    # Policy: prefix-entity-alias — one entity ID is a prefix of the other (cross-corpus only)
+    if review_type == "entity-alias" and len(local_ids) >= 2 and len(corpora) >= 2:
         sorted_ids = sorted(local_ids, key=len)
         if sorted_ids[-1].startswith(sorted_ids[0]) and len(sorted_ids[0]) >= 10:
             canonical = item.get("suggested_canonical_subject") or sorted_ids[-1]
