@@ -6,9 +6,11 @@ repo: conversation-corpus-engine
 metadata:
   tier: standard
   promotion_status: GRADUATED
+  version: "0.3.0"
   description: >-
     Canonical corpus and federation engine for multi-provider AI conversation memory.
-    Owns provider import, evaluation, governance, federation, and Meta/MCP surface exports.
+    Owns provider import, evaluation, governance, federation, triage automation,
+    operator dashboard, and Meta/MCP surface exports. 8 providers, 32 modules, 86 tests.
   language: python
   license: MIT
 
@@ -41,6 +43,18 @@ produces:
     signal_class: INTERFACE_CONTRACT
     consumers: [META-ORGANVM]
   - type: evaluation-scorecard
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: dashboard-payload
+    signal_class: STATE_MODEL
+    consumers: [ORGAN-I]
+  - type: triage-plan
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: import-audit
+    signal_class: EXECUTION_TRACE
+    consumers: [ORGAN-I]
+  - type: near-duplicates
     signal_class: VALIDATION_RECORD
     consumers: [ORGAN-I]
 
