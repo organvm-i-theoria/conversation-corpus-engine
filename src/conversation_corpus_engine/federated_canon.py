@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -467,6 +468,22 @@ def contradiction_signal(left: dict[str, Any], right: dict[str, Any]) -> float:
     return 0.0
 
 
+def build_review_id(review_type: str, subject_ids: list[str]) -> str:
+    return f"federated-{review_type}-{slugify(' '.join(subject_ids), limit=80)}"
+
+
+def stabilize_review_ids(suggestions: list[dict[str, Any]]) -> None:
+    review_id_counts = Counter(item["review_id"] for item in suggestions)
+    for item in suggestions:
+        review_id = item["review_id"]
+        if review_id_counts[review_id] <= 1:
+            continue
+        fingerprint = sha1(decision_subject_key(item.get("subject_ids") or []).encode("utf-8")).hexdigest()[
+            :8
+        ]
+        item["review_id"] = f"{review_id}-{fingerprint}"
+
+
 def build_pair_suggestions(
     records: list[dict[str, Any]],
     *,
@@ -500,7 +517,7 @@ def build_pair_suggestions(
             )
             suggestions.append(
                 {
-                    "review_id": f"federated-{review_type}-{slugify(' '.join(subject_ids), limit=80)}",
+                    "review_id": build_review_id(review_type, subject_ids),
                     "review_type": review_type,
                     "status": "open",
                     "priority": "high" if score >= max(0.8, threshold + 0.15) else "medium",
@@ -520,6 +537,7 @@ def build_pair_suggestions(
                     "updated_at": now_iso(),
                 },
             )
+    stabilize_review_ids(suggestions)
     suggestions.sort(
         key=lambda item: (item["priority"] != "high", -item["score"], item["review_id"])
     )

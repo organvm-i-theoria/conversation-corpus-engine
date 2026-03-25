@@ -8,71 +8,82 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from conversation_corpus_engine.import_claude_export_corpus import import_claude_export_corpus
+from conversation_corpus_engine.import_claude_export_corpus import (  # noqa: E402
+    build_thread_audit,
+    detect_near_duplicates,
+    extract_message_text,
+    import_claude_export_corpus,
+)
 
 
 class ImportClaudeExportCorpusTests(unittest.TestCase):
+    def _write_bundle(self, root: Path, conversations: list[dict[str, object]]) -> Path:
+        bundle = root / "claude-bundle"
+        bundle.mkdir(parents=True, exist_ok=True)
+        (bundle / "users.json").write_text(
+            json.dumps([{"uuid": "user-1", "full_name": "Test User"}]),
+            encoding="utf-8",
+        )
+        (bundle / "projects.json").write_text("[]", encoding="utf-8")
+        (bundle / "memories.json").write_text("[]", encoding="utf-8")
+        (bundle / "conversations.json").write_text(
+            json.dumps(conversations),
+            encoding="utf-8",
+        )
+        return bundle
+
     def test_import_claude_export_corpus_builds_federation_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            bundle = Path(tmpdir) / "claude-bundle"
+            root = Path(tmpdir)
             output_root = Path(tmpdir) / "claude-history-memory"
-            bundle.mkdir(parents=True, exist_ok=True)
-            (bundle / "users.json").write_text(
-                json.dumps([{"uuid": "user-1", "full_name": "Test User"}]),
-                encoding="utf-8",
-            )
-            (bundle / "projects.json").write_text("[]", encoding="utf-8")
-            (bundle / "memories.json").write_text("[]", encoding="utf-8")
-            (bundle / "conversations.json").write_text(
-                json.dumps(
-                    [
-                        {
-                            "uuid": "conv-1",
-                            "name": "Claude Test Thread",
-                            "summary": "",
-                            "created_at": "2026-03-14T10:00:00Z",
-                            "updated_at": "2026-03-14T10:05:00Z",
-                            "chat_messages": [
-                                {
-                                    "uuid": "msg-1",
-                                    "sender": "human",
-                                    "created_at": "2026-03-14T10:00:00Z",
-                                    "updated_at": "2026-03-14T10:00:00Z",
-                                    "text": "Build the adapter for Claude exports.",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": "Build the adapter for Claude exports.",
-                                        }
-                                    ],
-                                    "attachments": [],
-                                    "files": [],
-                                },
-                                {
-                                    "uuid": "msg-2",
-                                    "sender": "assistant",
-                                    "created_at": "2026-03-14T10:01:00Z",
-                                    "updated_at": "2026-03-14T10:01:00Z",
-                                    "text": "I will implement a Claude export adapter and keep it in calibration.",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": "I will implement a Claude export adapter and keep it in calibration.",
-                                        },
-                                        {
-                                            "type": "tool_use",
-                                            "name": "artifacts",
-                                            "input": {"title": "Claude Adapter Plan"},
-                                        },
-                                    ],
-                                    "attachments": [],
-                                    "files": [],
-                                },
-                            ],
-                        },
-                    ],
-                ),
-                encoding="utf-8",
+            bundle = self._write_bundle(
+                root,
+                [
+                    {
+                        "uuid": "conv-1",
+                        "name": "Claude Test Thread",
+                        "summary": "",
+                        "created_at": "2026-03-14T10:00:00Z",
+                        "updated_at": "2026-03-14T10:05:00Z",
+                        "chat_messages": [
+                            {
+                                "uuid": "msg-1",
+                                "sender": "human",
+                                "created_at": "2026-03-14T10:00:00Z",
+                                "updated_at": "2026-03-14T10:00:00Z",
+                                "text": "Build the adapter for Claude exports.",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "Build the adapter for Claude exports.",
+                                    }
+                                ],
+                                "attachments": [],
+                                "files": [],
+                            },
+                            {
+                                "uuid": "msg-2",
+                                "sender": "assistant",
+                                "created_at": "2026-03-14T10:01:00Z",
+                                "updated_at": "2026-03-14T10:01:00Z",
+                                "text": "I will implement a Claude export adapter and keep it in calibration.",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "I will implement a Claude export adapter and keep it in calibration.",
+                                    },
+                                    {
+                                        "type": "tool_use",
+                                        "name": "artifacts",
+                                        "input": {"title": "Claude Adapter Plan"},
+                                    },
+                                ],
+                                "attachments": [],
+                                "files": [],
+                            },
+                        ],
+                    },
+                ],
             )
 
             result = import_claude_export_corpus(
@@ -98,6 +109,215 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
             self.assertIn("claude-export", threads[0]["tags"])
             readme = (output_root / "README.md").read_text(encoding="utf-8")
             self.assertIn("Imported conversations: 1", readme)
+
+    def test_import_claude_export_writes_audit_and_near_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_root = root / "claude-history-memory"
+            duplicate_prompt = "Please build a deterministic federation adapter with audit visibility."
+            bundle = self._write_bundle(
+                root,
+                [
+                    {
+                        "uuid": "conv-1",
+                        "name": "Claude Audit Thread A",
+                        "summary": "",
+                        "created_at": "2026-03-14T10:00:00Z",
+                        "updated_at": "2026-03-14T10:05:00Z",
+                        "chat_messages": [
+                            {
+                                "uuid": "msg-1",
+                                "sender": "human",
+                                "created_at": "2026-03-14T10:00:00Z",
+                                "updated_at": "2026-03-14T10:00:00Z",
+                                "text": duplicate_prompt,
+                                "content": [{"type": "text", "text": duplicate_prompt}],
+                                "attachments": [],
+                                "files": [],
+                            },
+                            {
+                                "uuid": "msg-2",
+                                "sender": "assistant",
+                                "created_at": "2026-03-14T10:01:00Z",
+                                "updated_at": "2026-03-14T10:01:00Z",
+                                "text": "",
+                                "content": [
+                                    {"type": "code", "language": "python", "text": "print(1)"},
+                                    {
+                                        "type": "tool_result",
+                                        "name": "python",
+                                        "content": [{"type": "text", "text": "42"}],
+                                    },
+                                    {"type": "image", "width": 800, "height": 600},
+                                ],
+                                "attachments": [{"file_name": "spec.pdf"}],
+                                "files": [{"name": "notes.txt"}],
+                            },
+                        ],
+                    },
+                    {
+                        "uuid": "conv-2",
+                        "name": "Claude Audit Thread B",
+                        "summary": "",
+                        "created_at": "2026-03-14T11:00:00Z",
+                        "updated_at": "2026-03-14T11:05:00Z",
+                        "chat_messages": [
+                            {
+                                "uuid": "msg-3",
+                                "sender": "human",
+                                "created_at": "2026-03-14T11:00:00Z",
+                                "updated_at": "2026-03-14T11:00:00Z",
+                                "text": duplicate_prompt,
+                                "content": [{"type": "text", "text": duplicate_prompt}],
+                                "attachments": [],
+                                "files": [],
+                            },
+                            {
+                                "uuid": "msg-4",
+                                "sender": "assistant",
+                                "created_at": "2026-03-14T11:01:00Z",
+                                "updated_at": "2026-03-14T11:01:00Z",
+                                "text": "I will keep parity with the richer adapter path.",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "I will keep parity with the richer adapter path.",
+                                    }
+                                ],
+                                "attachments": [],
+                                "files": [],
+                            },
+                        ],
+                    },
+                ],
+            )
+
+            result = import_claude_export_corpus(
+                bundle,
+                output_root,
+                corpus_id="claude-history-memory",
+                name="Claude History Memory",
+            )
+
+            contract = json.loads(
+                (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
+            )
+            audits = json.loads(
+                (output_root / "corpus" / "import-audit.json").read_text(encoding="utf-8")
+            )
+            duplicates = json.loads(
+                (output_root / "corpus" / "near-duplicates.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(result["near_duplicate_count"], 1)
+            self.assertEqual(contract["counts"]["near_duplicates"], 1)
+            self.assertIn("flagged_threads", contract["counts"])
+            self.assertEqual(len(audits), 2)
+            self.assertEqual(len(duplicates), 1)
+            self.assertEqual(
+                duplicates[0]["titles"],
+                ["Claude Audit Thread A", "Claude Audit Thread B"],
+            )
+
+
+class ExtractMessageTextTests(unittest.TestCase):
+    def _message(
+        self,
+        *,
+        text: str = "",
+        content: list[dict[str, object]] | None = None,
+        attachments: list[dict[str, object]] | None = None,
+        files: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        return {
+            "sender": "assistant",
+            "text": text,
+            "content": content or [],
+            "attachments": attachments or [],
+            "files": files or [],
+        }
+
+    def test_extracts_rich_segments_from_claude_message(self) -> None:
+        message = self._message(
+            text="Review the generated artifacts.",
+            content=[
+                {"type": "code", "language": "python", "text": "print(1)"},
+                {
+                    "type": "tool_result",
+                    "name": "python",
+                    "content": [{"type": "text", "text": "42"}],
+                },
+                {"type": "execution_output", "content": {"stdout": "done"}},
+                {"type": "image", "width": 800, "height": 600},
+            ],
+            attachments=[{"file_name": "spec.pdf"}],
+            files=[{"name": "notes.txt"}],
+        )
+
+        result = extract_message_text(message)
+
+        self.assertIn("Review the generated artifacts.", result)
+        self.assertIn("```python", result)
+        self.assertIn("print(1)", result)
+        self.assertIn("[tool_result:python]", result)
+        self.assertIn("[Execution output: done]", result)
+        self.assertIn("[Image: 800x600]", result)
+        self.assertIn("[attachment:spec.pdf]", result)
+        self.assertIn("[file:notes.txt]", result)
+
+    def test_extracts_fallback_text_from_unknown_content(self) -> None:
+        message = self._message(
+            content=[{"type": "custom", "content": [{"text": "Nested text survives."}]}],
+        )
+        self.assertIn("Nested text survives.", extract_message_text(message))
+
+
+class BuildThreadAuditTests(unittest.TestCase):
+    def test_produces_audit_statistics(self) -> None:
+        messages = [
+            {"sender": "human", "text": "hi", "content": [{"type": "text", "text": "hi"}]},
+            {
+                "sender": "assistant",
+                "text": "",
+                "content": [{"type": "tool_result", "name": "tool", "content": "ok"}],
+            },
+        ]
+
+        audit = build_thread_audit(messages, ["hi", "[tool_result:tool]"], [])
+
+        self.assertEqual(audit["message_count"], 2)
+        self.assertEqual(audit["retained_count"], 2)
+        self.assertEqual(audit["raw_sender_counts"]["human"], 1)
+        self.assertEqual(audit["raw_sender_counts"]["assistant"], 1)
+        self.assertEqual(audit["raw_content_type_counts"]["text"], 1)
+        self.assertEqual(audit["raw_content_type_counts"]["tool_result"], 1)
+        self.assertIsInstance(audit["quality_flags"], list)
+
+
+class DetectNearDuplicatesTests(unittest.TestCase):
+    def test_detects_identical_prompts(self) -> None:
+        threads = [
+            {"thread_uid": "t1", "title_normalized": "Claude A"},
+            {"thread_uid": "t2", "title_normalized": "Claude B"},
+        ]
+        prompts = {
+            "t1": "Please help me build a recursive engine for symbolic computing",
+            "t2": "Please help me build a recursive engine for symbolic computing",
+        }
+
+        result = detect_near_duplicates(threads, prompts)
+
+        self.assertEqual(len(result), 1)
+        self.assertGreaterEqual(result[0]["similarity"], 0.92)
+
+    def test_ignores_short_prompts(self) -> None:
+        threads = [
+            {"thread_uid": "t1", "title_normalized": "A"},
+            {"thread_uid": "t2", "title_normalized": "B"},
+        ]
+        prompts = {"t1": "hi", "t2": "hi"}
+
+        self.assertEqual(detect_near_duplicates(threads, prompts), [])
 
 
 if __name__ == "__main__":

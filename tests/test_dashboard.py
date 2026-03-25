@@ -12,7 +12,30 @@ from conversation_corpus_engine.dashboard import (
     review_queue_summary,
 )
 from conversation_corpus_engine.federation import upsert_corpus
-from tests.conftest import seed_minimal_corpus
+
+
+def seed_minimal_corpus(root: Path, *, gate_state: str = "pass") -> Path:
+    corpus_dir = root / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    for filename, payload in {
+        "threads-index.json": [],
+        "semantic-v3-index.json": {"threads": []},
+        "pairs-index.json": [],
+        "doctrine-briefs.json": [],
+        "family-dossiers.json": [],
+    }.items():
+        (corpus_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
+    (corpus_dir / "regression-gates.json").write_text(
+        json.dumps(
+            {
+                "overall_state": gate_state,
+                "source_reliability_state": "pass",
+                "gates": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return root
 
 
 class DashboardTests(unittest.TestCase):

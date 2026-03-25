@@ -6,6 +6,7 @@ import json
 import shutil
 from collections import Counter
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -251,18 +252,70 @@ def summarize_tool_use(item: dict[str, Any]) -> str:
 
 def summarize_tool_result(item: dict[str, Any]) -> str:
     name = item.get("name") or "tool"
-    content = item.get("content") or []
-    text_items = []
-    for subitem in content:
-        if subitem.get("type") == "text":
-            value = normalize_whitespace(subitem.get("text") or "")
-            if value and value.upper() != "OK":
-                text_items.append(value)
+    text_items = [
+        value for value in collect_text_segments(item.get("content")) if value.upper() != "OK"
+    ]
     if text_items:
         return shorten(f"[tool_result:{name}] " + " ".join(text_items), 200)
     if item.get("is_error"):
         return f"[tool_result:{name}:error]"
     return f"[tool_result:{name}]"
+
+
+def collect_text_segments(payload: Any) -> list[str]:
+    segments: list[str] = []
+    if isinstance(payload, str):
+        cleaned = normalize_whitespace(payload)
+        if cleaned:
+            segments.append(cleaned)
+        return segments
+    if isinstance(payload, list):
+        for item in payload:
+            segments.extend(collect_text_segments(item))
+        return segments
+    if not isinstance(payload, dict):
+        return segments
+    text_value = payload.get("text")
+    if isinstance(text_value, str):
+        cleaned = normalize_whitespace(text_value)
+        if cleaned:
+            segments.append(cleaned)
+    for key in ("content", "value", "output", "stdout", "stderr"):
+        if key in payload:
+            segments.extend(collect_text_segments(payload.get(key)))
+    return dedupe_preserve(segments)
+
+
+def summarize_execution_output(payload: Any, *, prefix: str) -> str:
+    text = normalize_whitespace(" ".join(collect_text_segments(payload)))
+    if len(text) > 500:
+        text = text[:497] + "..."
+    if text:
+        return f"[{prefix}: {text}]"
+    return f"[{prefix}]"
+
+
+def summarize_code_item(item: dict[str, Any]) -> str:
+    language = item.get("language") or item.get("mime_type") or "text"
+    raw_text = ""
+    for candidate in (item.get("text"), item.get("content"), item.get("code"), item.get("value")):
+        if isinstance(candidate, str) and candidate.strip():
+            raw_text = candidate
+            break
+    if not raw_text:
+        raw_text = "\n".join(collect_text_segments(item))
+    if raw_text.strip():
+        return f"```{language}\n{raw_text.strip()}\n```"
+    return f"[code:{language}]"
+
+
+def summarize_media_item(item: dict[str, Any]) -> str:
+    name = item.get("file_name") or item.get("name") or item.get("title")
+    width = item.get("width")
+    height = item.get("height")
+    size = f"{width}x{height}" if width and height else ""
+    descriptor = name or size or item.get("mime_type") or "image"
+    return f"[Image: {descriptor}]"
 
 
 def extract_message_text(message: dict[str, Any]) -> str:
@@ -271,15 +324,29 @@ def extract_message_text(message: dict[str, Any]) -> str:
     if raw_text:
         segments.append(raw_text)
     for item in message.get("content") or []:
-        item_type = item.get("type")
+        item_type = (item.get("type") or "").lower()
         if item_type == "text":
             value = normalize_whitespace(item.get("text") or "")
             if value and value not in segments:
                 segments.append(value)
+        elif item_type == "code":
+            segments.append(summarize_code_item(item))
         elif item_type == "tool_use":
             segments.append(summarize_tool_use(item))
         elif item_type == "tool_result":
             segments.append(summarize_tool_result(item))
+        elif item_type in {"execution_output", "tool_output"}:
+            segments.append(summarize_execution_output(item, prefix="Execution output"))
+        elif item_type in {"image", "image_asset", "image_pointer"}:
+            segments.append(summarize_media_item(item))
+        elif item_type in {"attachment", "document", "file"}:
+            name = item.get("file_name") or item.get("name") or item.get("title")
+            if name:
+                segments.append(f"[file:{name}]")
+        else:
+            for value in collect_text_segments(item):
+                if value and value not in segments:
+                    segments.append(value)
     for attachment in message.get("attachments") or []:
         name = attachment.get("file_name") or attachment.get("name")
         if name:
@@ -382,6 +449,90 @@ def build_entities(title: str, keywords: list[str]) -> list[dict[str, str]]:
     return result
 
 
+def build_thread_audit(
+    messages: list[dict[str, Any]],
+    extracted_texts: list[str],
+    pairs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    raw_sender_counts: Counter[str] = Counter()
+    raw_content_type_counts: Counter[str] = Counter()
+    skipped_count = 0
+    empty_render_count = 0
+
+    for message in messages:
+        sender = (message.get("sender") or "none").lower()
+        raw_sender_counts[sender] += 1
+        raw_text = normalize_whitespace(message.get("text") or "")
+        if raw_text:
+            raw_content_type_counts["text_field"] += 1
+        content_items = message.get("content") or []
+        if content_items:
+            for item in content_items:
+                raw_content_type_counts[(item.get("type") or "none").lower()] += 1
+        elif not raw_text:
+            raw_content_type_counts["none"] += 1
+
+        text = extract_message_text(message)
+        if not text:
+            skipped_count += 1
+            if content_items or raw_text:
+                empty_render_count += 1
+
+    retained = len(extracted_texts)
+    retention_ratio = round(retained / len(messages), 4) if messages else 0.0
+
+    flags: list[str] = []
+    if retention_ratio < 0.65 and len(messages) > 4:
+        flags.append("low_retention")
+    if empty_render_count > 5:
+        flags.append("high_empty_render")
+    if any(not pair.get("summary", "").strip() for pair in pairs):
+        flags.append("pair_without_response")
+
+    return {
+        "message_count": len(messages),
+        "retained_count": retained,
+        "skipped_count": skipped_count,
+        "empty_render_count": empty_render_count,
+        "retention_ratio": retention_ratio,
+        "raw_sender_counts": dict(raw_sender_counts),
+        "raw_content_type_counts": dict(raw_content_type_counts),
+        "path_sender_counts": dict(raw_sender_counts),
+        "quality_flags": flags,
+    }
+
+
+def detect_near_duplicates(
+    threads: list[dict[str, Any]],
+    first_prompts: dict[str, str],
+    *,
+    threshold: float = 0.92,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    uids = [thread["thread_uid"] for thread in threads]
+    for left in range(len(uids)):
+        prompt_left = first_prompts.get(uids[left], "")
+        if len(prompt_left) < 20:
+            continue
+        for right in range(left + 1, len(uids)):
+            prompt_right = first_prompts.get(uids[right], "")
+            if len(prompt_right) < 20:
+                continue
+            ratio = SequenceMatcher(None, prompt_left[:500], prompt_right[:500]).ratio()
+            if ratio >= threshold:
+                candidates.append(
+                    {
+                        "thread_uids": [uids[left], uids[right]],
+                        "similarity": round(ratio, 4),
+                        "titles": [
+                            threads[left].get("title_normalized", ""),
+                            threads[right].get("title_normalized", ""),
+                        ],
+                    }
+                )
+    return candidates
+
+
 def copy_bundle_files(bundle_root: Path, output_root: Path) -> list[str]:
     copied: list[str] = []
     source_root = output_root / "source"
@@ -423,6 +574,8 @@ def import_claude_export_corpus(
     unresolved: list[dict[str, Any]] = []
     import_manifest: list[dict[str, Any]] = []
     entity_map: dict[str, dict[str, Any]] = {}
+    thread_audits: list[dict[str, Any]] = []
+    first_prompts: dict[str, str] = {}
 
     imported_conversation_count = 0
     empty_conversation_count = 0
@@ -454,6 +607,20 @@ def import_claude_export_corpus(
         for pair in pair_items:
             pair["entities"] = semantic_entities
         pairs.extend(pair_items)
+
+        audit = build_thread_audit(messages, extracted_messages, pair_items)
+        audit["thread_uid"] = thread_uid
+        thread_audits.append(audit)
+
+        first_human_prompt = ""
+        for message in messages:
+            if (message.get("sender") or "").lower() != "human":
+                continue
+            extracted_prompt = extract_message_text(message)
+            if extracted_prompt:
+                first_human_prompt = extracted_prompt
+                break
+        first_prompts[thread_uid] = first_human_prompt
 
         action_items = [
             {
@@ -498,7 +665,7 @@ def import_claude_export_corpus(
                 "semantic_v3_summary": f"{title} imported Claude conversation centered on {', '.join(keywords[:4])}.",
                 "action_count": len(action_items),
                 "unresolved_question_count": len(unresolved_items),
-                "audit_flags": [],
+                "audit_flags": audit.get("quality_flags", []),
                 "thread_path": str(output_root / "source" / "conversations.json"),
                 "family_ids": [family_id],
                 "update_time_iso": update_time,
@@ -588,6 +755,7 @@ def import_claude_export_corpus(
         for entity in entities
         if entity.get("aliases")
     ]
+    near_duplicates = detect_near_duplicates(threads, first_prompts)
 
     corpus_dir = output_root / "corpus"
     source_snapshot = build_source_snapshot(bundle_root, "claude-export", "bundle-json")
@@ -602,6 +770,9 @@ def import_claude_export_corpus(
     write_json(corpus_dir / "canonical-entities.json", entities)
     write_json(corpus_dir / "entity-aliases.json", entity_aliases)
     write_json(corpus_dir / "doctrine-timeline.json", [])
+    write_json(corpus_dir / "import-audit.json", thread_audits)
+    if near_duplicates:
+        write_json(corpus_dir / "near-duplicates.json", near_duplicates)
     write_json(corpus_dir / "source-snapshot.json", source_snapshot)
     write_json(
         corpus_dir / "contract.json",
@@ -630,6 +801,8 @@ def import_claude_export_corpus(
                 "memories": len(memories),
                 "users": len(users),
                 "empty_conversations": empty_conversation_count,
+                "near_duplicates": len(near_duplicates),
+                "flagged_threads": sum(1 for audit in thread_audits if audit.get("quality_flags")),
             },
             "source_input": str(bundle_root),
             "collection_scope": "bundle-json",
@@ -695,6 +868,8 @@ def import_claude_export_corpus(
         "action_count": len(actions),
         "unresolved_count": len(unresolved),
         "empty_conversation_count": empty_conversation_count,
+        "near_duplicate_count": len(near_duplicates),
+        "flagged_thread_count": sum(1 for audit in thread_audits if audit.get("quality_flags")),
         "manifest_path": str(output_root / "import-manifest.json"),
         "readme_path": str(output_root / "README.md"),
     }

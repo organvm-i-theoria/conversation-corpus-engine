@@ -47,6 +47,18 @@ def path_has_supported_export_content(path: Path) -> bool:
     return bool(collect_supported_export_files(path))
 
 
+def has_direct_supported_export_content(path: Path) -> bool:
+    path = path.resolve()
+    if not path.exists():
+        return False
+    if path.is_file():
+        return path.suffix.lower() in SUPPORTED_EXPORT_SUFFIXES
+    return any(
+        entry.is_file() and entry.suffix.lower() in SUPPORTED_EXPORT_SUFFIXES
+        for entry in visible_entries(path)
+    )
+
+
 def looks_like_claude_bundle(path: Path) -> bool:
     return (
         path.is_dir() and (path / "conversations.json").exists() and (path / "users.json").exists()
@@ -55,7 +67,7 @@ def looks_like_claude_bundle(path: Path) -> bool:
 
 def resolve_document_export_source_path(upload_root: Path, *, provider: str) -> Path:
     upload_root = upload_root.resolve()
-    if path_has_supported_export_content(upload_root):
+    if has_direct_supported_export_content(upload_root):
         return upload_root
 
     entries = visible_entries(upload_root)

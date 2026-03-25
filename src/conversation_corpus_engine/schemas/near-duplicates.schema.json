@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Near Duplicates",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "thread_uids",
+      "similarity",
+      "titles"
+    ],
+    "properties": {
+      "thread_uids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "similarity": {
+        "type": "number"
+      },
+      "titles": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

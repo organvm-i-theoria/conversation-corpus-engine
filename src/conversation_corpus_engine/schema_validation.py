@@ -9,6 +9,14 @@ SCHEMA_CATALOG = {
         "filename": "corpus-contract.schema.json",
         "description": "Canonical corpus contract manifest emitted under corpus/contract.json.",
     },
+    "import-audit": {
+        "filename": "import-audit.schema.json",
+        "description": "Per-thread import audit records emitted under corpus/import-audit.json.",
+    },
+    "near-duplicates": {
+        "filename": "near-duplicates.schema.json",
+        "description": "Near-duplicate thread candidates emitted under corpus/near-duplicates.json.",
+    },
     "source-policy": {
         "filename": "source-policy.schema.json",
         "description": "Per-provider source authority policy under state/source-policies/<provider>.json.",

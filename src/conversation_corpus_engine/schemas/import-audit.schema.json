@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Import Audit",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "thread_uid",
+      "retained_count",
+      "skipped_count",
+      "empty_render_count",
+      "retention_ratio",
+      "raw_content_type_counts",
+      "quality_flags"
+    ],
+    "properties": {
+      "thread_uid": {
+        "type": "string"
+      },
+      "mapping_node_count": {
+        "type": ["integer", "null"]
+      },
+      "path_node_count": {
+        "type": ["integer", "null"]
+      },
+      "message_count": {
+        "type": ["integer", "null"]
+      },
+      "retained_count": {
+        "type": "integer"
+      },
+      "skipped_count": {
+        "type": "integer"
+      },
+      "empty_render_count": {
+        "type": "integer"
+      },
+      "retention_ratio": {
+        "type": "number"
+      },
+      "raw_role_counts": {
+        "type": "object"
+      },
+      "path_role_counts": {
+        "type": "object"
+      },
+      "raw_sender_counts": {
+        "type": "object"
+      },
+      "path_sender_counts": {
+        "type": "object"
+      },
+      "raw_content_type_counts": {
+        "type": "object"
+      },
+      "quality_flags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

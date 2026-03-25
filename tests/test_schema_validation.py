@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from conversation_corpus_engine.governance_policy import (
     load_or_create_promotion_policy,
     promotion_policy_path,
 )
+from conversation_corpus_engine.import_claude_export_corpus import import_claude_export_corpus
 from conversation_corpus_engine.import_document_export_corpus import import_document_export_corpus
 from conversation_corpus_engine.import_markdown_document_corpus import (
     import_markdown_document_corpus,
@@ -43,7 +45,9 @@ class SchemaValidationTests(unittest.TestCase):
             [
                 "corpus-candidate",
                 "corpus-contract",
+                "import-audit",
                 "mcp-context",
+                "near-duplicates",
                 "promotion-policy",
                 "provider-refresh",
                 "source-policy",
@@ -76,6 +80,102 @@ class SchemaValidationTests(unittest.TestCase):
             result = validate_json_file("corpus-contract", output_root / "corpus" / "contract.json")
 
             self.assertTrue(result["valid"], result["errors"])
+
+    def test_validate_real_import_audit_and_near_duplicates_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_root = Path(tmpdir)
+            bundle_root = workspace_root / "claude-export"
+            output_root = workspace_root / "claude-history-memory"
+            prompt = "Please build a deterministic federation adapter with audit visibility."
+            bundle_root.mkdir(parents=True, exist_ok=True)
+            (bundle_root / "users.json").write_text(
+                '[{"uuid":"user-1","full_name":"Schema Test User"}]',
+                encoding="utf-8",
+            )
+            (bundle_root / "projects.json").write_text("[]", encoding="utf-8")
+            (bundle_root / "memories.json").write_text("[]", encoding="utf-8")
+            (bundle_root / "conversations.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "uuid": "conv-1",
+                            "name": "Audit Thread A",
+                            "created_at": "2026-03-14T10:00:00Z",
+                            "updated_at": "2026-03-14T10:05:00Z",
+                            "chat_messages": [
+                                {
+                                    "uuid": "msg-1",
+                                    "sender": "human",
+                                    "created_at": "2026-03-14T10:00:00Z",
+                                    "updated_at": "2026-03-14T10:00:00Z",
+                                    "text": prompt,
+                                    "content": [{"type": "text", "text": prompt}],
+                                    "attachments": [],
+                                    "files": [],
+                                },
+                                {
+                                    "uuid": "msg-2",
+                                    "sender": "assistant",
+                                    "created_at": "2026-03-14T10:01:00Z",
+                                    "updated_at": "2026-03-14T10:01:00Z",
+                                    "text": "Ready.",
+                                    "content": [{"type": "text", "text": "Ready."}],
+                                    "attachments": [],
+                                    "files": [],
+                                },
+                            ],
+                        },
+                        {
+                            "uuid": "conv-2",
+                            "name": "Audit Thread B",
+                            "created_at": "2026-03-14T11:00:00Z",
+                            "updated_at": "2026-03-14T11:05:00Z",
+                            "chat_messages": [
+                                {
+                                    "uuid": "msg-3",
+                                    "sender": "human",
+                                    "created_at": "2026-03-14T11:00:00Z",
+                                    "updated_at": "2026-03-14T11:00:00Z",
+                                    "text": prompt,
+                                    "content": [{"type": "text", "text": prompt}],
+                                    "attachments": [],
+                                    "files": [],
+                                },
+                                {
+                                    "uuid": "msg-4",
+                                    "sender": "assistant",
+                                    "created_at": "2026-03-14T11:01:00Z",
+                                    "updated_at": "2026-03-14T11:01:00Z",
+                                    "text": "Still ready.",
+                                    "content": [{"type": "text", "text": "Still ready."}],
+                                    "attachments": [],
+                                    "files": [],
+                                },
+                            ],
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            import_claude_export_corpus(
+                bundle_root,
+                output_root,
+                corpus_id="claude-history-memory",
+                name="Claude History Memory",
+            )
+
+            audit_result = validate_json_file(
+                "import-audit",
+                output_root / "corpus" / "import-audit.json",
+            )
+            near_duplicates_result = validate_json_file(
+                "near-duplicates",
+                output_root / "corpus" / "near-duplicates.json",
+            )
+
+            self.assertTrue(audit_result["valid"], audit_result["errors"])
+            self.assertTrue(near_duplicates_result["valid"], near_duplicates_result["errors"])
 
     def test_validate_source_policy_and_promotion_policy_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

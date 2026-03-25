@@ -10,7 +10,8 @@ metadata:
   description: >-
     Canonical corpus and federation engine for multi-provider AI conversation memory.
     Owns provider import, evaluation, governance, federation, triage automation,
-    operator dashboard, and Meta/MCP surface exports. 8 providers, 32 modules, 86 tests.
+    operator dashboard, review-assist campaigns, and Meta/MCP surface exports.
+    Supports 8 providers and full dedicated module-level regression coverage.
   language: python
   license: MIT
 
@@ -49,6 +50,21 @@ produces:
     signal_class: STATE_MODEL
     consumers: [ORGAN-I]
   - type: triage-plan
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: review-campaign-report
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: review-rollup
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: review-packet-hydration
+    signal_class: VALIDATION_RECORD
+    consumers: [ORGAN-I]
+  - type: review-scoreboard
+    signal_class: STATE_MODEL
+    consumers: [ORGAN-I]
+  - type: review-apply-plan
     signal_class: VALIDATION_RECORD
     consumers: [ORGAN-I]
   - type: import-audit

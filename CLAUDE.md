@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Canonical ENGINE for multi-provider AI conversation memory. Functional class: ENGINE. Formation type: GENERATOR. Signal signature: `(Σ,Π,Θ) → (Σ,Π,Ω,Δ)`. Zero runtime dependencies beyond stdlib.
 
-Owns: provider import, corpus validation, evaluation, federation, governance policy, Meta/MCP surface exports.
+Owns: provider import, corpus validation, evaluation, federation, governance policy, review-queue triage and review-assist workflows, Meta/MCP surface exports.
 
-Sibling deployment site: `../conversation-corpus-site/` (RESERVOIR, FORM-RES-001, not git). 5 live corpora, 744 federated families, 3,542 actions. ChatGPT is the genesis provider (55-thread corpus with manual gold fixtures, all gates pass).
+Sibling deployment site: `../conversation-corpus-site/` (RESERVOIR, FORM-RES-001, not git). It hosts the live corpora, federation outputs, and operator artifacts consumed by this engine. ChatGPT is the genesis provider with the oldest manually curated gold fixtures.
 
 ## Constitutional Context
 
@@ -52,20 +52,20 @@ cce evaluation run --root /path/to/corpus --seed --json
 
 ### CLI Command Tree
 
-The `cce` entrypoint has 11 command groups. All accept `--project-root` (default: `CCE_PROJECT_ROOT` or repo root) and most accept `--json` for machine output.
+The `cce` entrypoint has 13 top-level command groups. All accept `--project-root` (default: `CCE_PROJECT_ROOT` or repo root) where relevant, and most operational commands accept `--json` for machine output.
 
 ```
 cce corpus      list | register           # manage corpus registry
 cce federation  build                      # materialize cross-corpus indices
 cce migration   seed-from-staging          # bootstrap registry from legacy staging root
 cce provider    discover | readiness | import | bootstrap-eval | refresh
-cce schema      list | show | validate     # inspect/validate the 8 JSON schema contracts
+cce schema      list | show | validate     # inspect/validate the 10 JSON schema contracts
 cce surface     manifest | context | bundle # Meta/MCP-facing surface exports
 cce source-policy  show | set | history    # per-provider source authority
 cce policy      show | replay | stage | review | apply | rollback  # promotion thresholds
 cce candidate   show | history | stage | review | promote | rollback  # corpus candidates
 cce evaluation  run                        # regression gate evaluation
-cce review      queue | history | resolve | triage  # federated review queue + auto-triage
+cce review      queue | history | resolve | triage | assist | campaign | campaign-index | packet-hydrate | campaign-scoreboard | campaign-rollup | reject-stage | apply-plan | sample-summary | sample-propose | sample-compare
 cce source      freshness                  # source staleness check
 cce dashboard                              # operator-facing health summary
 ```
@@ -76,7 +76,7 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deep
 
 ## Architecture
 
-32 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 8 JSON schemas bundled as package data in `src/conversation_corpus_engine/schemas/`.
+31 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 10 JSON schemas are bundled as package data in `src/conversation_corpus_engine/schemas/`.
 
 ### Project Root Directories
 
@@ -89,7 +89,7 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deep
 
 `answering.py` is the shared utility layer — `load_json`, `write_json`, `write_markdown`, `slugify`, `tokenize`, `search_documents_v4`, `build_answer`. Nearly every other module imports from it. `paths.py` provides `default_project_root()` and path constants (`REPO_ROOT`, `PACKAGE_ROOT`).
 
-**Provider pipeline:** `provider_catalog.py` defines `PROVIDER_CONFIG` (6 providers with adapter types, inbox paths, corpus ID conventions). `provider_discovery.py` scans source-drop inboxes using detection functions from `provider_exports.py`. `provider_import.py` routes each provider to its adapter. `provider_readiness.py` aggregates status across all providers. `provider_refresh.py` orchestrates the full import→eval→stage→promote lifecycle.
+**Provider pipeline:** `provider_catalog.py` defines `PROVIDER_CONFIG` (8 providers with adapter types, inbox paths, corpus ID conventions). `provider_discovery.py` scans source-drop inboxes using detection functions from `provider_exports.py`. `provider_import.py` routes each provider to its adapter. `provider_readiness.py` aggregates status across all providers. `provider_refresh.py` orchestrates the full import→eval→stage→promote lifecycle.
 
 **Import adapters** produce identical corpus artifact sets (threads-index, pairs-index, doctrine-briefs, canonical-families, etc.):
 - `import_chatgpt_export_corpus.py` — walks ChatGPT `mapping` tree (parent/children pointers), linearizes by `create_time`
@@ -105,11 +105,11 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deep
 
 **Source management:** `source_policy.py` tracks per-provider source authority (primary/fallback roots, manual vs auto decisions). `source_lifecycle.py` computes source freshness via hash-based change detection.
 
-**Federation:** `federation.py` materializes cross-corpus indices. `federated_canon.py` manages the human review queue (5 review types: entity-alias, family-merge, action-merge, unresolved-merge, contradiction).
+**Federation:** `federation.py` materializes cross-corpus indices. `federated_canon.py` manages the human review queue (5 review types: entity-alias, family-merge, action-merge, unresolved-merge, contradiction) and now stabilizes new review IDs when truncated slugs would otherwise collide.
 
 **Schema validation:** `schema_validation.py` implements a stdlib-only JSON Schema validator (no `jsonschema` dependency) supporting type checks, required properties, const/enum, nested objects, and arrays. `surface_exports.py` assembles META-facing manifests validated against these schemas.
 
-**Operator tools:** `dashboard.py` aggregates corpora gates, federation stats, review queue, and provider readiness into a single `cce dashboard` view. `triage.py` provides policy-driven auto-resolution of federated review items — 5 policies: exact-cross-corpus, slug-match, prefix-entity-alias, noise-entity, contradiction-defer.
+**Operator tools:** `dashboard.py` aggregates corpora gates, federation stats, review queue, and provider readiness into a single `cce dashboard` view. `triage.py` provides policy-driven auto-resolution of federated review items plus the entity-alias review-assist surface: grouped assist reports, packet sampling, assistant proposal sidecars, manual/proposal comparison, campaign indexing, rollups, packet hydration, scoreboards, reject-stage previews, and disabled apply-plan contracts.
 
 ### Evaluation Gates
 

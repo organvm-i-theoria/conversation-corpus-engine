@@ -56,7 +56,49 @@ from .surface_exports import (
     write_mcp_context_artifacts,
     write_surface_manifest_artifacts,
 )
-from .triage import build_triage_plan, execute_triage_plan
+from .triage import (
+    STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS,
+    build_entity_alias_review_assist,
+    build_entity_alias_review_apply_plan,
+    build_entity_alias_review_campaign,
+    build_entity_alias_review_campaign_index,
+    build_entity_alias_review_rollup,
+    build_entity_alias_review_scoreboard,
+    build_entity_alias_reject_stage,
+    build_triage_plan,
+    compare_entity_alias_review_sample_to_proposal,
+    execute_triage_plan,
+    filter_entity_alias_review_assist_groups,
+    hydrate_entity_alias_review_sample_packet,
+    propose_entity_alias_review_sample,
+    render_entity_alias_review_apply_plan,
+    render_entity_alias_reject_stage,
+    render_entity_alias_review_campaign,
+    render_entity_alias_review_campaign_index,
+    render_entity_alias_review_rollup,
+    render_entity_alias_review_scoreboard,
+    render_entity_alias_review_packet_hydration,
+    render_entity_alias_review_sample_comparison,
+    render_entity_alias_review_sample_proposal,
+    render_entity_alias_review_sample_summary,
+    render_entity_alias_review_sample,
+    render_entity_alias_review_assist,
+    sample_entity_alias_review_assist_groups,
+    select_entity_alias_review_assist_batch,
+    summarize_entity_alias_review_sample,
+    write_entity_alias_review_assist_artifacts,
+    write_entity_alias_review_campaign_artifacts,
+    write_entity_alias_review_campaign_index_artifacts,
+    write_entity_alias_review_rollup_artifacts,
+    write_entity_alias_reject_stage_artifacts,
+    write_entity_alias_review_apply_plan_artifacts,
+    write_entity_alias_review_packet_hydration_artifacts,
+    write_entity_alias_review_scoreboard_artifacts,
+    write_entity_alias_review_sample_artifacts,
+    write_entity_alias_review_sample_comparison_artifacts,
+    write_entity_alias_review_sample_proposal_artifacts,
+    write_entity_alias_review_sample_summary_artifacts,
+)
 
 
 def parse_threshold_overrides(values: list[str] | None) -> dict[str, float]:
@@ -394,6 +436,190 @@ def build_parser() -> argparse.ArgumentParser:
     review_triage.add_argument("--project-root", type=Path, default=default_project_root())
     review_triage.add_argument("--execute", action="store_true", help="Apply the triage plan")
     review_triage.add_argument("--json", action="store_true")
+    review_assist = review_sub.add_parser(
+        "assist",
+        help="Build grouped operator guidance for the remaining entity-alias queue",
+    )
+    review_assist.add_argument("--project-root", type=Path, default=default_project_root())
+    review_assist.add_argument("--batch-size", type=int, default=25)
+    review_assist.add_argument("--group-limit", type=int, default=10)
+    review_assist.add_argument(
+        "--relation",
+        dest="relations",
+        action="append",
+        help="Filter assist output to one or more relation types",
+    )
+    review_assist.add_argument("--source-pair", help="Filter assist output to a single source pair")
+    review_assist.add_argument(
+        "--anchor-contains",
+        help="Filter assist output to anchors containing this normalized text",
+    )
+    review_assist.add_argument("--batch-id", help="Select a single precomputed assist batch")
+    review_assist.add_argument(
+        "--bucket",
+        dest="buckets",
+        action="append",
+        help="Filter assist output to one or more review buckets",
+    )
+    review_assist.add_argument(
+        "--sample-groups",
+        type=int,
+        help="Select a cross-batch sample of matching groups",
+    )
+    review_assist.add_argument(
+        "--sample-batches",
+        type=int,
+        help="Restrict cross-batch sampling to the first N matching batches",
+    )
+    review_assist.add_argument(
+        "--batch-offset",
+        type=int,
+        default=0,
+        help="Skip the first N matching batches before sampling",
+    )
+    review_assist.add_argument(
+        "--write",
+        action="store_true",
+        help="Write latest JSON/Markdown assist artifacts under reports/",
+    )
+    review_assist.add_argument("--json", action="store_true")
+    review_campaign = review_sub.add_parser(
+        "campaign",
+        help="Build the standard multi-window entity-alias evidence campaign",
+    )
+    review_campaign.add_argument("--project-root", type=Path, default=default_project_root())
+    review_campaign.add_argument("--batch-size", type=int, default=25)
+    review_campaign.add_argument(
+        "--scenario",
+        dest="scenarios",
+        action="append",
+        choices=sorted(entry["label"] for entry in STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS),
+        help="Restrict the campaign to one or more named scenarios",
+    )
+    review_campaign.add_argument("--write", action="store_true")
+    review_campaign.add_argument("--json", action="store_true")
+    review_campaign_index = review_sub.add_parser(
+        "campaign-index",
+        help="Inventory generated review campaign packets, comparisons, and campaign manifests",
+    )
+    review_campaign_index.add_argument("--project-root", type=Path, default=default_project_root())
+    review_campaign_index.add_argument("--write", action="store_true")
+    review_campaign_index.add_argument("--json", action="store_true")
+    review_packet_hydrate = review_sub.add_parser(
+        "packet-hydrate",
+        help="Hydrate and validate a completed review sample packet",
+    )
+    review_packet_hydrate.add_argument("--path", type=Path, required=True)
+    review_packet_hydrate.add_argument("--project-root", type=Path, default=default_project_root())
+    review_packet_hydrate.add_argument("--write", action="store_true")
+    review_packet_hydrate.add_argument("--json", action="store_true")
+    review_scoreboard = review_sub.add_parser(
+        "campaign-scoreboard",
+        help="Rank incomplete packets by how quickly they can unlock the reject-stage gate",
+    )
+    review_scoreboard.add_argument("--project-root", type=Path, default=default_project_root())
+    review_scoreboard.add_argument("--min-reject-precision", type=float, default=0.95)
+    review_scoreboard.add_argument("--min-adjudicated", type=int, default=20)
+    review_scoreboard.add_argument("--write", action="store_true")
+    review_scoreboard.add_argument("--json", action="store_true")
+    review_rollup = review_sub.add_parser(
+        "campaign-rollup",
+        help="Aggregate comparison evidence across multiple review packets",
+    )
+    review_rollup.add_argument("--project-root", type=Path, default=default_project_root())
+    review_rollup.add_argument(
+        "--status",
+        dest="statuses",
+        action="append",
+        choices=["pending", "partial", "complete", "empty"],
+        help="Restrict the rollup to one or more packet adjudication states",
+    )
+    review_rollup.add_argument(
+        "--scenario",
+        dest="scenarios",
+        action="append",
+        choices=sorted(entry["label"] for entry in STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS),
+        help="Restrict the rollup to one or more named scenarios",
+    )
+    review_rollup.add_argument("--packet-id", dest="packet_ids", action="append")
+    review_rollup.add_argument("--campaign-id", dest="campaign_ids", action="append")
+    review_rollup.add_argument("--write", action="store_true")
+    review_rollup.add_argument("--json", action="store_true")
+    review_reject_stage = review_sub.add_parser(
+        "reject-stage",
+        help="Build a non-applying staged reject manifest from adjudicated review packets",
+    )
+    review_reject_stage.add_argument("--project-root", type=Path, default=default_project_root())
+    review_reject_stage.add_argument(
+        "--status",
+        dest="statuses",
+        action="append",
+        choices=["pending", "partial", "complete", "empty"],
+        help="Restrict the stage input to one or more packet adjudication states",
+    )
+    review_reject_stage.add_argument(
+        "--scenario",
+        dest="scenarios",
+        action="append",
+        choices=sorted(entry["label"] for entry in STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS),
+        help="Restrict the stage input to one or more named scenarios",
+    )
+    review_reject_stage.add_argument("--packet-id", dest="packet_ids", action="append")
+    review_reject_stage.add_argument("--campaign-id", dest="campaign_ids", action="append")
+    review_reject_stage.add_argument("--min-reject-precision", type=float, default=0.95)
+    review_reject_stage.add_argument("--min-adjudicated", type=int, default=20)
+    review_reject_stage.add_argument("--write", action="store_true")
+    review_reject_stage.add_argument("--json", action="store_true")
+    review_apply_plan = review_sub.add_parser(
+        "apply-plan",
+        help="Render the disabled pre-apply snapshot and rollback contract for future queue mutation",
+    )
+    review_apply_plan.add_argument("--project-root", type=Path, default=default_project_root())
+    review_apply_plan.add_argument(
+        "--status",
+        dest="statuses",
+        action="append",
+        choices=["pending", "partial", "complete", "empty"],
+        help="Restrict the plan input to one or more packet adjudication states",
+    )
+    review_apply_plan.add_argument(
+        "--scenario",
+        dest="scenarios",
+        action="append",
+        choices=sorted(entry["label"] for entry in STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS),
+        help="Restrict the plan input to one or more named scenarios",
+    )
+    review_apply_plan.add_argument("--packet-id", dest="packet_ids", action="append")
+    review_apply_plan.add_argument("--campaign-id", dest="campaign_ids", action="append")
+    review_apply_plan.add_argument("--min-reject-precision", type=float, default=0.95)
+    review_apply_plan.add_argument("--min-adjudicated", type=int, default=20)
+    review_apply_plan.add_argument("--write", action="store_true")
+    review_apply_plan.add_argument("--json", action="store_true")
+    review_sample_summary = review_sub.add_parser(
+        "sample-summary",
+        help="Summarize a completed entity-alias review sample packet",
+    )
+    review_sample_summary.add_argument("--path", type=Path, required=True)
+    review_sample_summary.add_argument("--project-root", type=Path, default=default_project_root())
+    review_sample_summary.add_argument("--write", action="store_true")
+    review_sample_summary.add_argument("--json", action="store_true")
+    review_sample_propose = review_sub.add_parser(
+        "sample-propose",
+        help="Generate assistant proposals for a review sample packet without mutating it",
+    )
+    review_sample_propose.add_argument("--path", type=Path, required=True)
+    review_sample_propose.add_argument("--project-root", type=Path, default=default_project_root())
+    review_sample_propose.add_argument("--write", action="store_true")
+    review_sample_propose.add_argument("--json", action="store_true")
+    review_sample_compare = review_sub.add_parser(
+        "sample-compare",
+        help="Compare manual sample outcomes against assistant proposal outcomes",
+    )
+    review_sample_compare.add_argument("--sample-path", type=Path, required=True)
+    review_sample_compare.add_argument("--proposal-path", type=Path, required=True)
+    review_sample_compare.add_argument("--project-root", type=Path, default=default_project_root())
+    review_sample_compare.add_argument("--write", action="store_true")
+    review_sample_compare.add_argument("--json", action="store_true")
 
     source = subparsers.add_parser("source", help="Inspect source freshness")
     source_sub = source.add_subparsers(dest="action", required=True)
@@ -797,6 +1023,275 @@ def main() -> None:
                     print(f"  Error: {err}")
         elif payload["auto_resolvable"] > 0:
             print("\nRun with --execute to apply.")
+        return
+
+    if args.group == "review" and args.action == "assist":
+        payload = build_entity_alias_review_assist(
+            args.project_root,
+            batch_size=args.batch_size,
+            relation_filters=args.relations,
+            source_pair=args.source_pair,
+            anchor_contains=args.anchor_contains,
+        )
+        if args.batch_id:
+            try:
+                payload = select_entity_alias_review_assist_batch(payload, args.batch_id)
+            except ValueError as exc:
+                parser.error(str(exc))
+        payload = filter_entity_alias_review_assist_groups(
+            payload,
+            review_bucket_filters=args.buckets,
+        )
+        if args.sample_groups:
+            payload = sample_entity_alias_review_assist_groups(
+                payload,
+                sample_groups=args.sample_groups,
+                sample_batches=args.sample_batches,
+                batch_offset=args.batch_offset,
+            )
+        artifacts = None
+        if args.write:
+            if args.sample_groups:
+                artifacts = write_entity_alias_review_sample_artifacts(args.project_root, payload)
+            else:
+                artifacts = write_entity_alias_review_assist_artifacts(args.project_root, payload)
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        if args.sample_groups:
+            print(render_entity_alias_review_sample(payload))
+        else:
+            print(render_entity_alias_review_assist(payload, group_limit=args.group_limit))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "campaign":
+        try:
+            payload = build_entity_alias_review_campaign(
+                args.project_root,
+                batch_size=args.batch_size,
+                scenario_labels=args.scenarios,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        artifacts = (
+            write_entity_alias_review_campaign_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_campaign(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, value in artifacts.items():
+                if key == "scenario_artifacts":
+                    for label, scenario_artifacts in value.items():
+                        print(f"  scenario {label}:")
+                        for artifact_group, paths in scenario_artifacts.items():
+                            for path_key, path in paths.items():
+                                print(
+                                    f"    {artifact_group}.{path_key.removesuffix('_path')}: {path}"
+                                )
+                    continue
+                print(f"  {key.removesuffix('_path')}: {value}")
+        return
+
+    if args.group == "review" and args.action == "campaign-index":
+        payload = build_entity_alias_review_campaign_index(args.project_root)
+        artifacts = (
+            write_entity_alias_review_campaign_index_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_campaign_index(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "packet-hydrate":
+        payload = hydrate_entity_alias_review_sample_packet(args.path)
+        artifacts = (
+            write_entity_alias_review_packet_hydration_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_packet_hydration(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "campaign-scoreboard":
+        payload = build_entity_alias_review_scoreboard(
+            args.project_root,
+            min_reject_precision=args.min_reject_precision,
+            min_adjudicated=args.min_adjudicated,
+        )
+        artifacts = (
+            write_entity_alias_review_scoreboard_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_scoreboard(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "campaign-rollup":
+        payload = build_entity_alias_review_rollup(
+            args.project_root,
+            packet_statuses=args.statuses,
+            scenario_labels=args.scenarios,
+            packet_ids=args.packet_ids,
+            campaign_ids=args.campaign_ids,
+        )
+        artifacts = (
+            write_entity_alias_review_rollup_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_rollup(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "reject-stage":
+        payload = build_entity_alias_reject_stage(
+            args.project_root,
+            packet_statuses=args.statuses,
+            scenario_labels=args.scenarios,
+            packet_ids=args.packet_ids,
+            campaign_ids=args.campaign_ids,
+            min_reject_precision=args.min_reject_precision,
+            min_adjudicated=args.min_adjudicated,
+        )
+        artifacts = (
+            write_entity_alias_reject_stage_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_reject_stage(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "apply-plan":
+        payload = build_entity_alias_review_apply_plan(
+            args.project_root,
+            packet_statuses=args.statuses,
+            scenario_labels=args.scenarios,
+            packet_ids=args.packet_ids,
+            campaign_ids=args.campaign_ids,
+            min_reject_precision=args.min_reject_precision,
+            min_adjudicated=args.min_adjudicated,
+        )
+        artifacts = (
+            write_entity_alias_review_apply_plan_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_apply_plan(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "sample-summary":
+        payload = summarize_entity_alias_review_sample(args.path)
+        artifacts = (
+            write_entity_alias_review_sample_summary_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_sample_summary(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "sample-propose":
+        payload = propose_entity_alias_review_sample(args.path)
+        artifacts = (
+            write_entity_alias_review_sample_proposal_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_sample_proposal(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
+        return
+
+    if args.group == "review" and args.action == "sample-compare":
+        payload = compare_entity_alias_review_sample_to_proposal(
+            args.sample_path,
+            args.proposal_path,
+        )
+        artifacts = (
+            write_entity_alias_review_sample_comparison_artifacts(args.project_root, payload)
+            if args.write
+            else None
+        )
+        if args.json:
+            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            return
+        print(render_entity_alias_review_sample_comparison(payload))
+        if artifacts:
+            print("")
+            print("Artifacts:")
+            for key, path in artifacts.items():
+                print(f"  {key.removesuffix('_path')}: {path}")
         return
 
     if args.group == "source" and args.action == "freshness":

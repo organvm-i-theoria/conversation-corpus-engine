@@ -6,6 +6,7 @@ from typing import Any
 
 from .provider_catalog import PROVIDER_CONFIG, get_provider_config
 from .provider_exports import (
+    has_direct_supported_export_content,
     looks_like_chatgpt_export,
     looks_like_claude_bundle,
     path_has_supported_export_content,
@@ -35,7 +36,12 @@ def summarize_provider(provider: str, source_drop_root: Path) -> dict[str, Any]:
     if local_source_root:
         local_source_state = "present" if Path(local_source_root).exists() else "missing"
 
-    if detector(inbox_root):
+    if config["discovery_mode"] == "document-export":
+        root_ready = has_direct_supported_export_content(inbox_root)
+    else:
+        root_ready = detector(inbox_root)
+
+    if root_ready:
         detected_source_path = str(inbox_root)
         upload_state = "ready"
     else:
