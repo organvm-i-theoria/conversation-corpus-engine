@@ -39,3 +39,39 @@ Use conventional commits such as `feat: extract federation registry` or `fix: no
 
 ## Security & Migration Notes
 Do not commit raw provider exports, browser profiles, unsanitized local-session data, or generated `state/`, `reports/`, and `federation/` runtime artifacts. This repo should contain code, contracts, redacted fixtures, and public docs only.
+
+<!-- ORGANVM:AUTO:START -->
+## Agent Context (auto-generated — do not edit)
+
+This repo participates in the **ORGAN-I (Theory)** swarm.
+
+### Active Subscriptions
+- Event: `governance.updated` → Action: None
+- Event: `schema.registry.sync` → Action: None
+
+### Production Responsibilities
+- **Produce** `surface-manifest` for META-ORGANVM
+- **Produce** `mcp-context` for META-ORGANVM
+- **Produce** `surface-bundle` for META-ORGANVM
+- **Produce** `corpus-contract-schema` for META-ORGANVM
+- **Produce** `evaluation-scorecard` for ORGAN-I
+- **Produce** `dashboard-payload` for ORGAN-I
+- **Produce** `triage-plan` for ORGAN-I
+- **Produce** `review-campaign-report` for ORGAN-I
+- **Produce** `review-rollup` for ORGAN-I
+- **Produce** `review-packet-hydration` for ORGAN-I
+- **Produce** `review-scoreboard` for ORGAN-I
+- **Produce** `review-apply-plan` for ORGAN-I
+- **Produce** `import-audit` for ORGAN-I
+- **Produce** `near-duplicates` for ORGAN-I
+
+### External Dependencies
+- **Consume** `provider-exports` from `external`
+- **Consume** `governance-rules` from `META-ORGANVM`
+
+### Governance Constraints
+- Adhere to unidirectional flow: I→II→III
+- Never commit secrets or credentials
+
+*Last synced: 2026-03-25T22:27:07Z*
+<!-- ORGANVM:AUTO:END -->
