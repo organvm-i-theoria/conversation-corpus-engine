@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .chatgpt_local_session import DEFAULT_CHATGPT_COOKIE_JAR
 from .claude_local_session import DEFAULT_CLAUDE_LOCAL_ROOT
 from .evaluation_bootstrap import bootstrap_provider_evaluation
 from .federation import build_federation, upsert_corpus
 from .import_chatgpt_export_corpus import import_chatgpt_export_corpus
+from .import_chatgpt_local_session_corpus import import_chatgpt_local_session_corpus
 from .import_claude_export_corpus import import_claude_export_corpus
 from .import_claude_local_session_corpus import import_claude_local_session_corpus
 from .import_document_export_corpus import import_document_export_corpus
@@ -53,6 +55,10 @@ def resolve_provider_import_source(
         resolved_local_root = (local_root or DEFAULT_CLAUDE_LOCAL_ROOT).resolve()
         return resolved_local_root, {"resolution": "local-session-root"}
 
+    if provider == "chatgpt" and mode == "local-session":
+        resolved_cookie_jar = (local_root or DEFAULT_CHATGPT_COOKIE_JAR).resolve()
+        return resolved_cookie_jar, {"resolution": "local-session-cookie-jar"}
+
     resolved_source_drop_root = (
         source_drop_root or default_source_drop_root(project_root)
     ).resolve()
@@ -81,7 +87,7 @@ def default_output_root(
     source_drop_root: Path | None,
 ) -> Path:
     config = get_provider_config(provider)
-    if provider == "claude" and mode == "local-session":
+    if mode == "local-session" and provider in {"claude", "chatgpt"}:
         corpus_id = config["default_corpus_id"]
     else:
         corpus_id = (
@@ -133,6 +139,15 @@ def import_provider_corpus(
         resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
         resolved_name = resolved_name or config["default_corpus_name"]
         import_result = import_claude_local_session_corpus(
+            resolved_source_path,
+            resolved_output_root,
+            corpus_id=resolved_corpus_id,
+            name=resolved_name,
+        )
+    elif provider == "chatgpt" and mode == "local-session":
+        resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
+        resolved_name = resolved_name or config["default_corpus_name"]
+        import_result = import_chatgpt_local_session_corpus(
             resolved_source_path,
             resolved_output_root,
             corpus_id=resolved_corpus_id,

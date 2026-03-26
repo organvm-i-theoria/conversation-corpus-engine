@@ -72,11 +72,11 @@ cce dashboard                              # operator-facing health summary
 
 **`provider refresh`** is the primary operational workflow — orchestrates import → bootstrap eval → run eval → stage candidate → (optionally) review → promote in a single command. Use `--approve --promote` for end-to-end auto-promote.
 
-Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deepseek`, `mistral`. Claude also supports `--mode local-session` (reads from `~/Library/Application Support/Claude`).
+Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deepseek`, `mistral`. Both ChatGPT and Claude support `--mode local-session` for live desktop-app extraction. ChatGPT reads from `~/Library/HTTPStorages/com.openai.chat.binarycookies` (Apple binary cookie jar). Claude reads from `~/Library/Application Support/Claude` (Chromium Cookies SQLite).
 
 ## Architecture
 
-31 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 10 JSON schemas are bundled as package data in `src/conversation_corpus_engine/schemas/`.
+33 modules in `src/conversation_corpus_engine/`, flat structure. No subpackages. 10 JSON schemas are bundled as package data in `src/conversation_corpus_engine/schemas/`. Every module has a dedicated `tests/test_<module>.py`.
 
 ### Project Root Directories
 
@@ -93,6 +93,7 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deep
 
 **Import adapters** produce identical corpus artifact sets (threads-index, pairs-index, doctrine-briefs, canonical-families, etc.):
 - `import_chatgpt_export_corpus.py` — walks ChatGPT `mapping` tree (parent/children pointers), linearizes by `create_time`
+- `import_chatgpt_local_session_corpus.py` — reads from `~/Library/HTTPStorages/com.openai.chat.binarycookies` via `chatgpt_local_session.py`, authenticates to `chatgpt.com/api/auth/session`, fetches conversations live, delegates to `import_chatgpt_export_corpus` for corpus generation
 - `import_claude_export_corpus.py` — parses Claude `conversations.json` + `users.json` bundle
 - `import_claude_local_session_corpus.py` — reads from `~/Library/Application Support/Claude` via `claude_local_session.py`
 - `import_document_export_corpus.py` — generic multi-format (md/html/json/csv/zip) → normalizes to markdown → delegates to `import_markdown_document_corpus.py`

@@ -1,0 +1,495 @@
+#!/usr/bin/env python3
+"""ChatGPT local-session client.
+
+Reads cookies from either:
+1. The ChatGPT macOS desktop app's binary cookie jar
+   (~/Library/HTTPStorages/com.openai.chat.binarycookies)
+2. Chrome's Chromium cookie store (fallback when the native app session is stale)
+   (~/Library/Application Support/Google/Chrome/Default/Cookies)
+
+Authenticates via the chatgpt.com session API and fetches conversations
+through the backend API.
+
+Ported from the genesis script: conversation-corpus-site/archive/legacy-scripts/
+export_chatgpt_history.py — the origin of the entire conversation corpus engine.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import struct
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import pbkdf2_hmac, sha256
+from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
+
+DEFAULT_CHATGPT_COOKIE_JAR = Path(
+    "/Users/4jp/Library/HTTPStorages/com.openai.chat.binarycookies"
+)
+DEFAULT_CHROME_COOKIES = Path.home() / "Library/Application Support/Google/Chrome/Default/Cookies"
+CHROME_SAFE_STORAGE_SERVICES = ("Chrome Safe Storage", "Chromium Safe Storage")
+CHATGPT_COOKIE_HOST = ".chatgpt.com"
+CHATGPT_HOST = "chatgpt.com"
+CHATGPT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+
+
+class ChatGPTLocalSessionError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Cookie:
+    domain: str
+    name: str
+    path: str
+    value: str
+    secure: bool
+    http_only: bool
+
+
+@dataclass(frozen=True)
+class ChatGPTHttpSession:
+    cookies: list[Cookie]
+    session_payload: dict[str, Any]
+    access_token: str  # allow-secret
+    account_id: str
+    device_id: str
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Binary cookie jar parsing (Apple NSHTTPCookieStorage format)
+# ---------------------------------------------------------------------------
+
+
+def read_c_string(chunk: bytes, start: int) -> str:
+    end = chunk.find(b"\x00", start)
+    if end == -1:
+        end = len(chunk)
+    return chunk[start:end].decode("utf-8", "replace")
+
+
+def parse_binary_cookies(path: Path) -> list[Cookie]:
+    data = path.read_bytes()
+    if data[:4] != b"cook":
+        raise ChatGPTLocalSessionError(f"Unsupported cookie jar format: {path}")
+
+    page_count = struct.unpack(">I", data[4:8])[0]
+    offset = 8
+    page_sizes = [
+        struct.unpack(">I", data[offset + i * 4 : offset + (i + 1) * 4])[0]
+        for i in range(page_count)
+    ]
+    offset += 4 * page_count
+
+    cookies: list[Cookie] = []
+    for page_size in page_sizes:
+        page = data[offset : offset + page_size]
+        offset += page_size
+        cookie_count = struct.unpack("<I", page[4:8])[0]
+        cookie_offsets = [
+            struct.unpack("<I", page[8 + i * 4 : 12 + i * 4])[0]
+            for i in range(cookie_count)
+        ]
+        for cookie_offset in cookie_offsets:
+            chunk = page[cookie_offset:]
+            size = struct.unpack("<I", chunk[:4])[0]
+            chunk = chunk[:size]
+            flags = struct.unpack("<I", chunk[8:12])[0]
+            domain_offset = struct.unpack("<I", chunk[16:20])[0]
+            name_offset = struct.unpack("<I", chunk[20:24])[0]
+            path_offset = struct.unpack("<I", chunk[24:28])[0]
+            value_offset = struct.unpack("<I", chunk[28:32])[0]
+            cookies.append(
+                Cookie(
+                    domain=read_c_string(chunk, domain_offset),
+                    name=read_c_string(chunk, name_offset),
+                    path=read_c_string(chunk, path_offset) or "/",
+                    value=read_c_string(chunk, value_offset),
+                    secure=bool(flags & 1),
+                    http_only=bool(flags & 4),
+                )
+            )
+    return cookies
+
+
+# ---------------------------------------------------------------------------
+# Cookie utilities
+# ---------------------------------------------------------------------------
+
+
+def cookie_matches_host(cookie: Cookie, host: str) -> bool:
+    domain = cookie.domain.lstrip(".").lower()
+    host = host.lower()
+    return host == domain or host.endswith(f".{domain}")
+
+
+def build_cookie_header(cookies: list[Cookie], url: str) -> str:
+    host = urlparse(url).hostname or ""
+    selected = [
+        f"{cookie.name}={cookie.value}"
+        for cookie in cookies
+        if cookie_matches_host(cookie, host)
+    ]
+    return "; ".join(selected)
+
+
+def find_cookie_value(cookies: list[Cookie], host: str, name: str) -> str:
+    for cookie in cookies:
+        if cookie.name == name and cookie_matches_host(cookie, host):
+            return cookie.value
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Chrome Chromium cookie reading (fallback when native app session is stale)
+# ---------------------------------------------------------------------------
+
+
+def _find_chrome_safe_storage_password() -> str:
+    for service in CHROME_SAFE_STORAGE_SERVICES:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", service, "-w"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            pw = result.stdout.strip()  # allow-secret
+            if pw:
+                return pw
+    raise ChatGPTLocalSessionError(
+        "Unable to read Chrome Safe Storage password from the macOS keychain."
+    )
+
+
+def _decrypt_chrome_cookie(encrypted_value: bytes, host_key: str, key: bytes) -> str:
+    if not encrypted_value:
+        return ""
+    if not encrypted_value.startswith(b"v10"):
+        return encrypted_value.decode("utf-8", errors="replace")
+    iv = b" " * 16
+    result = subprocess.run(
+        ["openssl", "enc", "-aes-128-cbc", "-d", "-K", key.hex(), "-iv", iv.hex(), "-nopad"],
+        input=encrypted_value[3:],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout:
+        return ""
+    padded = result.stdout
+    pad_length = padded[-1]
+    if pad_length < 1 or pad_length > 16:
+        return ""
+    decrypted = padded[:-pad_length]
+    host_hash = sha256(host_key.encode("utf-8")).digest()
+    if decrypted.startswith(host_hash):
+        decrypted = decrypted[len(host_hash) :]
+    return decrypted.decode("utf-8", errors="replace")
+
+
+def load_chatgpt_cookies_from_chrome(
+    chrome_cookies: Path = DEFAULT_CHROME_COOKIES,
+) -> list[Cookie]:
+    if not chrome_cookies.exists():
+        raise ChatGPTLocalSessionError(f"Chrome Cookies database not found: {chrome_cookies}")
+    safe_pw = _find_chrome_safe_storage_password()  # allow-secret
+    key = pbkdf2_hmac("sha1", safe_pw.encode("utf-8"), b"saltysalt", 1003, 16)
+    connection = sqlite3.connect(chrome_cookies)
+    try:
+        rows = connection.execute(
+            "SELECT host_key, name, value, encrypted_value FROM cookies "
+            "WHERE host_key LIKE ? OR host_key LIKE ?",
+            ("%chatgpt%", "%openai%"),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    cookies: list[Cookie] = []
+    session_parts: dict[str, str] = {}
+    for host_key, name, value, encrypted_value in rows:
+        decrypted = value if value else _decrypt_chrome_cookie(encrypted_value, host_key, key)
+        if not decrypted:
+            continue
+        try:
+            decrypted.encode("latin-1")
+        except UnicodeEncodeError:
+            continue
+        if name.startswith("__Secure-next-auth.session-token."):
+            session_parts[name] = decrypted
+            continue
+        if name == "__Secure-next-auth.session-token":
+            cookies.append(Cookie(host_key, name, "/", decrypted, True, True))
+            continue
+        cookies.append(Cookie(host_key, name, "/", decrypted, False, False))
+
+    if session_parts and not any(c.name == "__Secure-next-auth.session-token" for c in cookies):
+        combined = "".join(session_parts[k] for k in sorted(session_parts))
+        if combined:
+            cookies.append(
+                Cookie(CHATGPT_COOKIE_HOST, "__Secure-next-auth.session-token", "/", combined, True, True)
+            )
+    return cookies
+
+
+# ---------------------------------------------------------------------------
+# HTTP client
+# ---------------------------------------------------------------------------
+
+
+def resolve_chatgpt_cookie_jar(
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> Path:
+    path = cookie_jar.resolve()
+    if not path.exists():
+        raise ChatGPTLocalSessionError(
+            f"ChatGPT cookie jar does not exist: {path}\n"
+            "The ChatGPT macOS desktop app must be installed and signed in."
+        )
+    data = path.read_bytes()[:4]
+    if data != b"cook":
+        raise ChatGPTLocalSessionError(
+            f"ChatGPT cookie jar has unexpected format (expected 'cook' magic): {path}"
+        )
+    return path
+
+
+def _request_json(
+    cookies: list[Cookie],
+    url: str,
+    *,
+    extra_headers: dict[str, str] | None = None,
+    timeout: int = 30,
+) -> Any:
+    headers: dict[str, str] = {
+        "Cookie": build_cookie_header(cookies, url),
+        "User-Agent": CHATGPT_USER_AGENT,
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": f"https://{CHATGPT_HOST}/",
+        "Origin": f"https://{CHATGPT_HOST}",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    request = Request(url, headers=headers, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        body = error.read().decode("utf-8", "replace")
+        raise ChatGPTLocalSessionError(
+            f"{error.code} while fetching {url}: {body[:500]}"
+        ) from error
+    except URLError as error:
+        raise ChatGPTLocalSessionError(
+            f"Network error while fetching {url}: {error}"
+        ) from error
+
+
+def _fetch_session(cookies: list[Cookie]) -> dict[str, Any]:
+    url = f"https://{CHATGPT_HOST}/api/auth/session"
+    payload = _request_json(cookies, url)
+    if not isinstance(payload, dict):
+        raise ChatGPTLocalSessionError(
+            "ChatGPT session payload was not a JSON object."
+        )
+    return payload
+
+
+def _session_has_valid_token(payload: dict[str, Any]) -> bool:
+    if "accessToken" not in payload:
+        return False
+    if payload.get("error") == "RefreshAccessTokenError":
+        return False
+    return True
+
+
+def _build_session_from_cookies(cookies: list[Cookie]) -> ChatGPTHttpSession | None:
+    try:
+        session_payload = _fetch_session(cookies)
+    except ChatGPTLocalSessionError:
+        return None
+    if not _session_has_valid_token(session_payload):
+        return None
+    access_token = session_payload["accessToken"]  # allow-secret
+    account = session_payload.get("account") or {}
+    account_id = account.get("id") or account.get("account_id") or ""
+    device_id = find_cookie_value(cookies, CHATGPT_HOST, "oai-did")
+    return ChatGPTHttpSession(
+        cookies=cookies,
+        session_payload=session_payload,
+        access_token=access_token,  # allow-secret
+        account_id=account_id,
+        device_id=device_id,
+    )
+
+
+def build_chatgpt_session(
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> ChatGPTHttpSession:
+    # Try 1: native ChatGPT macOS app binary cookie jar
+    try:
+        path = resolve_chatgpt_cookie_jar(cookie_jar)
+        native_cookies = parse_binary_cookies(path)
+        session = _build_session_from_cookies(native_cookies)
+        if session is not None:
+            return session
+    except ChatGPTLocalSessionError:
+        pass
+
+    # Try 2: Chrome Chromium cookie store (same decryption as Claude adapter)
+    try:
+        chrome_cookies = load_chatgpt_cookies_from_chrome()
+        session = _build_session_from_cookies(chrome_cookies)
+        if session is not None:
+            return session
+    except ChatGPTLocalSessionError:
+        pass
+
+    raise ChatGPTLocalSessionError(
+        "Unable to establish a ChatGPT session from either the native app "
+        "cookie jar or Chrome cookies. Sign in to chatgpt.com in either "
+        "the ChatGPT desktop app or Chrome."
+    )
+
+
+def _auth_headers(session: ChatGPTHttpSession) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {session.access_token}",  # allow-secret
+    }
+    if session.account_id:
+        headers["OpenAI-Account-ID"] = session.account_id
+    if session.device_id:
+        headers["OAI-Device-Id"] = session.device_id
+    return headers
+
+
+def fetch_json(session: ChatGPTHttpSession, url: str) -> Any:
+    return _request_json(
+        session.cookies, url, extra_headers=_auth_headers(session)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Discovery and bundle fetching
+# ---------------------------------------------------------------------------
+
+
+def discover_chatgpt_local_session(
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> dict[str, Any]:
+    session = build_chatgpt_session(cookie_jar)
+    account = session.session_payload.get("account") or {}
+    user = session.session_payload.get("user") or {}
+
+    url = f"https://{CHATGPT_HOST}/backend-api/conversations?{urlencode({'offset': 0, 'limit': 1})}"
+    conversations_page = fetch_json(session, url)
+    total_count = conversations_page.get("total", 0)
+
+    return {
+        "generated_at": now_iso(),
+        "cookie_jar": str(cookie_jar.resolve()),
+        "adapter_type": "chatgpt-local-session",
+        "collection_scope": "local-session",
+        "session_state": "ready",
+        "account_id": account.get("id") or account.get("account_id") or "",
+        "account_email": user.get("email") or account.get("email") or "",
+        "account_name": user.get("name") or "",
+        "conversation_count": total_count,
+        "recommended_command": (
+            "cce provider import --provider chatgpt --mode local-session --register --build"
+        ),
+        "calibration_only": True,
+    }
+
+
+def fetch_chatgpt_local_session_bundle(
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    session = build_chatgpt_session(cookie_jar)
+    account = session.session_payload.get("account") or {}
+    user = session.session_payload.get("user") or {}
+
+    url = (
+        f"https://{CHATGPT_HOST}/backend-api/conversations?"
+        f"{urlencode({'offset': offset, 'limit': limit})}"
+    )
+    conversations_page = fetch_json(session, url)
+    items = conversations_page.get("items") or []
+
+    detailed_conversations: list[dict[str, Any]] = []
+    detail_failures: list[dict[str, Any]] = []
+    for item in items:
+        conversation_id = item.get("id")
+        if not conversation_id:
+            continue
+        try:
+            detail_url = (
+                f"https://{CHATGPT_HOST}/backend-api/conversation/{conversation_id}"
+            )
+            detail = fetch_json(session, detail_url)
+            detailed_conversations.append(detail)
+        except Exception as exc:
+            detail_failures.append({"id": conversation_id, "error": str(exc)})
+
+    conversations_json = []
+    for detail in detailed_conversations:
+        conversations_json.append(
+            {
+                "conversation_id": detail.get("conversation_id") or detail.get("id"),
+                "title": detail.get("title") or "",
+                "create_time": detail.get("create_time"),
+                "update_time": detail.get("update_time"),
+                "mapping": detail.get("mapping") or {},
+                "current_node": detail.get("current_node"),
+                "is_archived": detail.get("is_archived", False),
+                "gizmo_id": detail.get("gizmo_id"),
+            }
+        )
+
+    user_payload = {
+        "id": account.get("id") or account.get("account_id") or "",
+        "email": user.get("email") or account.get("email") or "",
+        "chatgpt_plus_user": user.get("chatgpt_plus_user", False),
+    }
+
+    return {
+        "generated_at": now_iso(),
+        "cookie_jar": str(cookie_jar.resolve()),
+        "adapter_type": "chatgpt-local-session",
+        "collection_scope": "local-session",
+        "account": account,
+        "user": user_payload,
+        "conversation_summaries": items,
+        "conversations": conversations_json,
+        "conversation_detail_failures": detail_failures,
+        "total_count": conversations_page.get("total", len(items)),
+        "fetched_count": len(detailed_conversations),
+    }
+
+
+def render_discovery_text(payload: dict[str, Any]) -> str:
+    lines = [
+        f"ChatGPT cookie jar: {payload.get('cookie_jar', 'unknown')}",
+        f"Generated: {payload['generated_at']}",
+        f"Session state: {payload['session_state']}",
+        f"Account: {payload.get('account_email') or payload.get('account_id') or 'unknown'}",
+        f"Conversations: {payload['conversation_count']}",
+        f"Calibration only: {payload['calibration_only']}",
+        f"Recommended command: {payload['recommended_command']}",
+    ]
+    return "\n".join(lines)

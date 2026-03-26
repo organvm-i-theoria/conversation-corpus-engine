@@ -16,10 +16,15 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "adapter_type_aliases": ["chatgpt-history"],
         "discovery_mode": "chatgpt-bundle",
         "inbox_rel": "chatgpt/inbox",
-        "default_corpus_id": "chatgpt-history-memory",
-        "default_corpus_name": "ChatGPT History Memory",
+        "default_corpus_id": "chatgpt-local-session-memory",
+        "default_corpus_name": "ChatGPT Local Session Memory",
         "fallback_corpus_id": "chatgpt-history",
         "fallback_corpus_name": "ChatGPT History",
+        "local_source_root": "/Users/4jp/Library/HTTPStorages",
+        "local_session_supported": True,
+        "local_session_cookie_jar": (
+            "/Users/4jp/Library/HTTPStorages/com.openai.chat.binarycookies"
+        ),
         "calibration_only": True,
     },
     "claude": {
@@ -33,6 +38,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "fallback_corpus_id": "claude-history-memory",
         "fallback_corpus_name": "Claude History Memory",
         "local_source_root": "/Users/4jp/Library/Application Support/Claude",
+        "local_session_supported": True,
         "calibration_only": True,
     },
     "gemini": {
@@ -43,6 +49,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "inbox_rel": "gemini/inbox",
         "default_corpus_id": "gemini-history-memory",
         "default_corpus_name": "Gemini History Memory",
+        "local_session_supported": False,
         "calibration_only": True,
     },
     "grok": {
@@ -53,6 +60,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "inbox_rel": "grok/inbox",
         "default_corpus_id": "grok-history-memory",
         "default_corpus_name": "Grok History Memory",
+        "local_session_supported": False,
         "calibration_only": True,
     },
     "perplexity": {
@@ -64,6 +72,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "default_corpus_id": "perplexity-history-memory",
         "default_corpus_name": "Perplexity History Memory",
         "local_source_root": "/Users/4jp/Library/Containers/ai.perplexity.mac",
+        "local_session_supported": False,
         "calibration_only": True,
     },
     "copilot": {
@@ -75,6 +84,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "default_corpus_id": "copilot-history-memory",
         "default_corpus_name": "Copilot History Memory",
         "local_source_root": "/Users/4jp/Library/Containers/com.microsoft.copilot-mac",
+        "local_session_supported": False,
         "calibration_only": True,
         "notes": [
             "Current Copilot ingestion targets exported conversation bundles, not IDE extension traces.",
@@ -88,6 +98,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "inbox_rel": "deepseek/inbox",
         "default_corpus_id": "deepseek-history-memory",
         "default_corpus_name": "DeepSeek History Memory",
+        "local_session_supported": False,
         "calibration_only": True,
     },
     "mistral": {
@@ -98,6 +109,7 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "inbox_rel": "mistral/inbox",
         "default_corpus_id": "mistral-history-memory",
         "default_corpus_name": "Mistral History Memory",
+        "local_session_supported": False,
         "calibration_only": True,
     },
 }
