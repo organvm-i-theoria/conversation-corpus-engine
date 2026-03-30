@@ -15,6 +15,7 @@ SUPPORTED_SOURCE_ADAPTERS = {
     "claude-export",
     "claude-local-session",
     "chatgpt-export",
+    "chatgpt-local-session",
     "copilot-export",
     "gemini-export",
     "grok-export",
@@ -107,6 +108,14 @@ def collect_source_files(
                     files.append(tracked)
                 elif tracked.is_dir():
                     files.extend(path for path in tracked.rglob("*") if path.is_file())
+    elif adapter_type == "chatgpt-local-session":
+        if source_input.is_file():
+            files = [source_input]
+        else:
+            tracked_paths = [
+                source_input / "com.openai.chat.binarycookies",
+            ]
+            files = [p for p in tracked_paths if p.is_file()]
     elif adapter_type == "chatgpt-export":
         if source_input.is_file():
             files = [source_input]

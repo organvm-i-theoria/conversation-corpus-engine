@@ -177,7 +177,7 @@ def test_import_chatgpt_local_session_corpus_end_to_end(
     monkeypatch.setattr(
         module,
         "fetch_chatgpt_local_session_bundle",
-        lambda cookie_jar, limit=100, offset=0: bundle,
+        lambda cookie_jar, limit=100, offset=0, prior_state=None, output_root=None: bundle,
     )
 
     result = module.import_chatgpt_local_session_corpus(cookie_jar, output_root)
@@ -191,3 +191,77 @@ def test_import_chatgpt_local_session_corpus_end_to_end(
     assert discovery_file["account_id"] == "acct-1"
     readme = (output_root / "README.md").read_text(encoding="utf-8")
     assert "ChatGPT Local Session Memory Corpus" in readme
+
+
+def test_import_chatgpt_local_session_corpus_saves_acquisition_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cookie_jar = tmp_path / "cookies" / "com.openai.chat.binarycookies"
+    cookie_jar.parent.mkdir(parents=True, exist_ok=True)
+    cookie_jar.write_bytes(b"cook" + b"\x00" * 100)
+    output_root = tmp_path / "output"
+
+    discovery = {
+        "generated_at": "2026-03-30T00:00:00+00:00",
+        "account_id": "acct-1",
+        "account_email": "user@example.com",
+        "conversation_count": 1,
+    }
+    bundle = {
+        "generated_at": "2026-03-30T00:01:00+00:00",
+        "user": {"id": "acct-1", "email": "user@example.com"},
+        "conversations": [
+            {
+                "conversation_id": "conv-1",
+                "title": "Incremental Test",
+                "create_time": 1711900000,
+                "update_time": 1711900100,
+                "mapping": {
+                    "root": {"id": "root", "parent": None, "children": ["msg-1"], "message": None},
+                    "msg-1": {
+                        "id": "msg-1",
+                        "parent": "root",
+                        "children": [],
+                        "message": {
+                            "id": "msg-1",
+                            "author": {"role": "user"},
+                            "create_time": 1711900000,
+                            "content": {"content_type": "text", "parts": ["Test"]},
+                        },
+                    },
+                },
+                "current_node": "msg-1",
+            }
+        ],
+        "conversation_summaries": [{"id": "conv-1"}],
+        "conversation_detail_failures": [],
+        "total_count": 1,
+        "fetched_count": 1,
+        "reused_count": 0,
+        "acquisition_report": {
+            "generated_at": "2026-03-30T00:01:00+00:00",
+            "total_listed": 1,
+            "fetched_count": 1,
+            "reused_count": 0,
+            "skipped_count": 0,
+            "failure_count": 0,
+            "full_refresh": True,
+        },
+    }
+    monkeypatch.setattr(module, "discover_chatgpt_local_session", lambda cookie_jar: discovery)
+    monkeypatch.setattr(
+        module,
+        "fetch_chatgpt_local_session_bundle",
+        lambda cookie_jar, limit=100, offset=0, prior_state=None, output_root=None: bundle,
+    )
+
+    result = module.import_chatgpt_local_session_corpus(cookie_jar, output_root)
+
+    assert result["acquisition_report"]["fetched_count"] == 1
+    assert result["acquisition_report"]["full_refresh"] is True
+
+    state_path = output_root / "source" / "acquisition-state.json"
+    assert state_path.exists()
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert "conv-1" in state["conversations"]
+    assert state["conversations"]["conv-1"]["update_time"] == 1711900100

@@ -31,6 +31,7 @@ from .governance_policy import load_or_create_promotion_policy
 from .governance_replay import build_policy_replay_payload, write_policy_replay_artifacts
 from .migration import seed_registry_from_staging
 from .paths import default_project_root
+from .chatgpt_local_session import fetch_chatgpt_project
 from .provider_catalog import default_source_drop_root
 from .provider_discovery import discover_provider_uploads, render_provider_discovery_text
 from .provider_import import import_provider_corpus
@@ -239,6 +240,15 @@ def build_parser() -> argparse.ArgumentParser:
     provider_refresh.add_argument("--promote", action="store_true")
     provider_refresh.add_argument("--note", default="")
     provider_refresh.add_argument("--json", action="store_true")
+
+    project = subparsers.add_parser("project", help="Extract ChatGPT project files and conversations")
+    project_sub = project.add_subparsers(dest="action", required=True)
+    project_extract = project_sub.add_parser(
+        "extract", help="Extract a ChatGPT project's files and conversations to a local directory"
+    )
+    project_extract.add_argument("--project-id", required=True, help="ChatGPT project ID (g-p-...)")
+    project_extract.add_argument("--output", type=Path, required=True, help="Output directory")
+    project_extract.add_argument("--json", action="store_true")
 
     schema = subparsers.add_parser("schema", help="Inspect and validate published artifact schemas")
     schema_sub = schema.add_subparsers(dest="action", required=True)
@@ -743,6 +753,20 @@ def main() -> None:
             note=args.note,
         )
         print(json.dumps(payload, indent=2))
+        return
+
+    if args.group == "project" and args.action == "extract":
+        payload = fetch_chatgpt_project(
+            args.project_id,
+            args.output,
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2))
+            return
+        print(f"Project: {payload['project_name']}")
+        print(f"Output: {payload['output_root']}")
+        print(f"Files: {payload['file_count']}/{payload['total_files']}")
+        print(f"Conversations: {payload['conversation_count']}")
         return
 
     if args.group == "schema" and args.action == "list":

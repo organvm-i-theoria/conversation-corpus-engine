@@ -18,7 +18,9 @@ from .chatgpt_local_session import (
     DEFAULT_CHATGPT_COOKIE_JAR,
     discover_chatgpt_local_session,
     fetch_chatgpt_local_session_bundle,
+    load_prior_acquisition,
     now_iso,
+    save_acquisition_state,
 )
 from .import_chatgpt_export_corpus import import_chatgpt_export_corpus
 from .source_lifecycle import build_source_snapshot
@@ -123,8 +125,17 @@ def import_chatgpt_local_session_corpus(
     offset: int = 0,
 ) -> dict[str, Any]:
     cookie_jar = cookie_jar.resolve()
+    output_root = output_root.resolve()
     discovery = discover_chatgpt_local_session(cookie_jar)
-    bundle = fetch_chatgpt_local_session_bundle(cookie_jar, limit=limit, offset=offset)
+
+    prior_state = load_prior_acquisition(output_root)
+    bundle = fetch_chatgpt_local_session_bundle(
+        cookie_jar,
+        limit=limit,
+        offset=offset,
+        prior_state=prior_state,
+        output_root=output_root,
+    )
 
     with tempfile.TemporaryDirectory(prefix="chatgpt-local-session-") as tmpdir:
         bundle_root = Path(tmpdir) / "chatgpt-local-bundle"
@@ -146,9 +157,25 @@ def import_chatgpt_local_session_corpus(
                     bundle.get("conversation_detail_failures") or []
                 ),
                 "fetched_count": bundle.get("fetched_count", 0),
+                "reused_count": bundle.get("reused_count", 0),
                 "total_count": bundle.get("total_count", 0),
+                "acquisition_report": bundle.get("acquisition_report"),
             },
         )
+
+    new_state: dict[str, dict[str, Any]] = {}
+    for conv in bundle.get("conversations") or []:
+        cid = conv.get("conversation_id") or ""
+        if cid:
+            new_state[cid] = {
+                "update_time": conv.get("update_time"),
+                "fetched_at": bundle.get("generated_at") or now_iso(),
+            }
+    save_acquisition_state(
+        output_root,
+        new_state,
+        report=bundle.get("acquisition_report") or {},
+    )
 
     patch_contract_for_local_session(
         output_root, cookie_jar=cookie_jar, discovery=discovery
@@ -163,4 +190,5 @@ def import_chatgpt_local_session_corpus(
     result["detail_failure_count"] = len(
         bundle.get("conversation_detail_failures") or []
     )
+    result["acquisition_report"] = bundle.get("acquisition_report")
     return result

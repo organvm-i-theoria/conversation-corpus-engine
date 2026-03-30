@@ -189,3 +189,45 @@ def test_compute_source_freshness_reports_missing_source_when_contract_path_is_g
     assert freshness["needs_refresh"] is False
     assert freshness["can_refresh"] is False
     assert freshness["stored_signature_fingerprint"] == "stale-fingerprint"
+
+
+def test_collect_source_files_for_chatgpt_local_session_tracks_cookie_jar(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "HTTPStorages"
+    source_root.mkdir()
+    cookie_jar = source_root / "com.openai.chat.binarycookies"
+    cookie_jar.write_bytes(b"cook" + b"\x00" * 100)
+
+    files = collect_source_files(source_root, "chatgpt-local-session", "local-session")
+
+    assert files == [cookie_jar.resolve()]
+
+
+def test_compute_source_freshness_for_chatgpt_local_session_reports_states(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "HTTPStorages"
+    source_root.mkdir()
+    cookie_jar = source_root / "com.openai.chat.binarycookies"
+    cookie_jar.write_bytes(b"cook" + b"\x00" * 100)
+
+    corpus_root = tmp_path / "corpus-root"
+    _write_json(
+        corpus_root / "corpus" / "contract.json",
+        {
+            "adapter_type": "chatgpt-local-session",
+            "source_input": str(source_root.resolve()),
+            "collection_scope": "local-session",
+        },
+    )
+
+    missing_snapshot = compute_source_freshness(corpus_root)
+    assert missing_snapshot["state"] == "missing_snapshot"
+    assert missing_snapshot["needs_refresh"] is True
+
+    snapshot = build_source_snapshot(source_root, "chatgpt-local-session", "local-session")
+    _write_json(corpus_root / "corpus" / "source-snapshot.json", snapshot)
+    fresh = compute_source_freshness(corpus_root)
+    assert fresh["state"] == "fresh"
+    assert fresh["needs_refresh"] is False

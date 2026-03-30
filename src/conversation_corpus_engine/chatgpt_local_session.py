@@ -414,57 +414,172 @@ def discover_chatgpt_local_session(
     }
 
 
+# ---------------------------------------------------------------------------
+# Acquisition state persistence + payload caching
+# ---------------------------------------------------------------------------
+
+
+def _acquisition_state_path(output_root: Path) -> Path:
+    return output_root / "source" / "acquisition-state.json"
+
+
+def _conversation_cache_dir(output_root: Path) -> Path:
+    return output_root / "source" / "conversation-cache"
+
+
+def load_prior_acquisition(output_root: Path) -> dict[str, dict[str, Any]]:
+    state_path = _acquisition_state_path(output_root)
+    if not state_path.exists():
+        return {}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        return payload.get("conversations", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_acquisition_state(
+    output_root: Path,
+    conversations: dict[str, dict[str, Any]],
+    *,
+    report: dict[str, Any],
+) -> None:
+    state_path = _acquisition_state_path(output_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": now_iso(),
+        "conversation_count": len(conversations),
+        "conversations": conversations,
+        "last_acquisition_report": report,
+    }
+    state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def cache_conversation_payload(
+    output_root: Path, conversation_id: str, payload: dict[str, Any]
+) -> Path:
+    cache_dir = _conversation_cache_dir(output_root)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / f"{conversation_id}.json"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return path
+
+
+def load_cached_conversation(output_root: Path, conversation_id: str) -> dict[str, Any] | None:
+    path = _conversation_cache_dir(output_root) / f"{conversation_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _normalize_conversation_detail(detail: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "conversation_id": detail.get("conversation_id") or detail.get("id"),
+        "title": detail.get("title") or "",
+        "create_time": detail.get("create_time"),
+        "update_time": detail.get("update_time"),
+        "mapping": detail.get("mapping") or {},
+        "current_node": detail.get("current_node"),
+        "is_archived": detail.get("is_archived", False),
+        "gizmo_id": detail.get("gizmo_id"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bundle fetching (delta-aware)
+# ---------------------------------------------------------------------------
+
+
 def fetch_chatgpt_local_session_bundle(
     cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
     *,
     limit: int = 100,
     offset: int = 0,
+    prior_state: dict[str, dict[str, Any]] | None = None,
+    output_root: Path | None = None,
 ) -> dict[str, Any]:
     session = build_chatgpt_session(cookie_jar)
     account = session.session_payload.get("account") or {}
     user = session.session_payload.get("user") or {}
 
-    url = (
-        f"https://{CHATGPT_HOST}/backend-api/conversations?"
-        f"{urlencode({'offset': offset, 'limit': limit})}"
-    )
-    conversations_page = fetch_json(session, url)
-    items = conversations_page.get("items") or []
+    # Paginate all conversations
+    all_items: list[dict[str, Any]] = []
+    current_offset = offset
+    while True:
+        url = (
+            f"https://{CHATGPT_HOST}/backend-api/conversations?"
+            f"{urlencode({'offset': current_offset, 'limit': limit, 'is_archived': 'false'})}"
+        )
+        conversations_page = fetch_json(session, url)
+        items = conversations_page.get("items") or []
+        all_items.extend(items)
+        if len(items) < limit:
+            break
+        current_offset += limit
 
-    detailed_conversations: list[dict[str, Any]] = []
+    total_count = conversations_page.get("total", len(all_items)) if all_items else 0
+    prior = prior_state or {}
+    full_refresh = not prior
+
+    conversations_json: list[dict[str, Any]] = []
     detail_failures: list[dict[str, Any]] = []
-    for item in items:
+    fetched_count = 0
+    reused_count = 0
+    skipped_count = 0
+
+    for item in all_items:
         conversation_id = item.get("id")
         if not conversation_id:
+            skipped_count += 1
             continue
+
+        prior_entry = prior.get(conversation_id, {})
+        prior_update_time = prior_entry.get("update_time")
+        current_update_time = item.get("update_time")
+
+        if (
+            not full_refresh
+            and prior_update_time is not None
+            and current_update_time is not None
+            and prior_update_time == current_update_time
+            and output_root is not None
+        ):
+            cached = load_cached_conversation(output_root, conversation_id)
+            if cached is not None:
+                conversations_json.append(cached)
+                reused_count += 1
+                continue
+
         try:
             detail_url = (
                 f"https://{CHATGPT_HOST}/backend-api/conversation/{conversation_id}"
             )
             detail = fetch_json(session, detail_url)
-            detailed_conversations.append(detail)
+            normalized = _normalize_conversation_detail(detail)
+            conversations_json.append(normalized)
+            fetched_count += 1
+            if output_root is not None:
+                cache_conversation_payload(output_root, conversation_id, normalized)
         except Exception as exc:
             detail_failures.append({"id": conversation_id, "error": str(exc)})
-
-    conversations_json = []
-    for detail in detailed_conversations:
-        conversations_json.append(
-            {
-                "conversation_id": detail.get("conversation_id") or detail.get("id"),
-                "title": detail.get("title") or "",
-                "create_time": detail.get("create_time"),
-                "update_time": detail.get("update_time"),
-                "mapping": detail.get("mapping") or {},
-                "current_node": detail.get("current_node"),
-                "is_archived": detail.get("is_archived", False),
-                "gizmo_id": detail.get("gizmo_id"),
-            }
-        )
 
     user_payload = {
         "id": account.get("id") or account.get("account_id") or "",
         "email": user.get("email") or account.get("email") or "",
         "chatgpt_plus_user": user.get("chatgpt_plus_user", False),
+    }
+
+    acquisition_report = {
+        "generated_at": now_iso(),
+        "total_listed": len(all_items),
+        "fetched_count": fetched_count,
+        "reused_count": reused_count,
+        "skipped_count": skipped_count,
+        "failure_count": len(detail_failures),
+        "full_refresh": full_refresh,
     }
 
     return {
@@ -474,11 +589,137 @@ def fetch_chatgpt_local_session_bundle(
         "collection_scope": "local-session",
         "account": account,
         "user": user_payload,
-        "conversation_summaries": items,
+        "conversation_summaries": all_items,
         "conversations": conversations_json,
         "conversation_detail_failures": detail_failures,
-        "total_count": conversations_page.get("total", len(items)),
-        "fetched_count": len(detailed_conversations),
+        "total_count": total_count,
+        "fetched_count": fetched_count,
+        "reused_count": reused_count,
+        "acquisition_report": acquisition_report,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Project extraction
+# ---------------------------------------------------------------------------
+
+
+def fetch_chatgpt_project(
+    project_id: str,
+    output_root: Path,
+    *,
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> dict[str, Any]:
+    """Extract a ChatGPT Project's files and conversations to a local directory."""
+    import re
+    import time
+
+    from .import_chatgpt_export_corpus import walk_mapping_tree, extract_node_text
+
+    session = build_chatgpt_session(cookie_jar)
+    output_root = output_root.resolve()
+
+    project = fetch_json(session, f"https://{CHATGPT_HOST}/backend-api/gizmos/{project_id}")
+    gizmo = project.get("gizmo") or {}
+    files = project.get("files") or []
+    project_name = gizmo.get("display", {}).get("name") or project_id
+
+    meta_dir = output_root / "metadata"
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    (meta_dir / "project.json").write_text(
+        json.dumps(project, indent=2) + "\n", encoding="utf-8"
+    )
+
+    files_dir = output_root / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    convos_dir = output_root / "conversations"
+    convos_dir.mkdir(parents=True, exist_ok=True)
+
+    conv_groups: dict[str, list[dict[str, Any]]] = {}
+    for f in files:
+        meta = (f.get("metadata") or {}).get("project_save") or {}
+        cid = meta.get("conversation_id", "")
+        if cid:
+            conv_groups.setdefault(cid, []).append(f)
+
+    def _slugify(text: str) -> str:
+        s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+        return s[:60] if s else "untitled"
+
+    extracted_files = 0
+    seen_names: dict[str, int] = {}
+    conv_mappings: dict[str, dict[str, Any]] = {}
+
+    for cid, file_group in conv_groups.items():
+        try:
+            time.sleep(3)
+            detail = fetch_json(session, f"https://{CHATGPT_HOST}/backend-api/conversation/{cid}")
+            mapping = detail.get("mapping") or {}
+            conv_mappings[cid] = detail
+        except Exception:
+            continue
+
+        for f in file_group:
+            meta = (f.get("metadata") or {}).get("project_save") or {}
+            msg_id = meta.get("message_id", "")
+            name = f.get("name", "unnamed.txt")
+
+            if name in seen_names:
+                seen_names[name] += 1
+                base, ext = name.rsplit(".", 1) if "." in name else (name, "txt")
+                out_name = f"{base}-{seen_names[name]}.{ext}"
+            else:
+                seen_names[name] = 0
+                out_name = name
+
+            node = mapping.get(msg_id, {})
+            parts = (node.get("message") or {}).get("content", {}).get("parts", [])
+            text_parts = [p for p in parts if isinstance(p, str)]
+            if text_parts:
+                (files_dir / out_name).write_text("\n\n".join(text_parts), encoding="utf-8")
+                extracted_files += 1
+
+    extracted_convos = 0
+    for cid, detail in conv_mappings.items():
+        mapping = detail.get("mapping") or {}
+        title = detail.get("title") or "Untitled"
+        nodes = walk_mapping_tree(mapping)
+        lines = [f"# {title}", "", f"conversation_id: {cid}", ""]
+        for node in nodes:
+            msg = node.get("message")
+            if not msg:
+                continue
+            role = (msg.get("author", {}).get("role", "") or "").lower()
+            if role == "system":
+                continue
+            text = extract_node_text(node)
+            if not text.strip():
+                continue
+            content_type = (msg.get("content") or {}).get("content_type", "")
+            if role == "user":
+                label = "User"
+            elif role == "assistant":
+                label = "Assistant"
+            elif role == "tool":
+                if content_type == "tether_browsing_display":
+                    continue
+                label = "Assistant (artifact)"
+            else:
+                label = role.title()
+            lines.extend([f"## {label}", "", text, ""])
+        slug = _slugify(title)
+        (convos_dir / f"{slug}--{cid[:8]}.md").write_text("\n".join(lines), encoding="utf-8")
+        extracted_convos += 1
+
+    return {
+        "generated_at": now_iso(),
+        "project_id": project_id,
+        "project_name": project_name,
+        "output_root": str(output_root),
+        "file_count": extracted_files,
+        "total_files": len(files),
+        "conversation_count": extracted_convos,
+        "conversation_ids": list(conv_mappings.keys()),
     }
 
 

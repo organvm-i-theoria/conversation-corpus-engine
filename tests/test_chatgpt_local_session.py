@@ -280,3 +280,103 @@ def test_render_discovery_text_includes_key_fields() -> None:
     assert "ChatGPT cookie jar: /tmp/cookies" in text
     assert "user@example.com" in text
     assert "Conversations: 42" in text
+
+
+def test_acquisition_state_persistence_roundtrips(tmp_path: Path) -> None:
+    conversations = {
+        "conv-1": {"update_time": 1711900000, "fetched_at": "2026-03-25T00:00:00Z"},
+        "conv-2": {"update_time": 1711900100, "fetched_at": "2026-03-25T00:01:00Z"},
+    }
+    report = {"fetched_count": 2, "reused_count": 0}
+    module.save_acquisition_state(tmp_path, conversations, report=report)
+    loaded = module.load_prior_acquisition(tmp_path)
+
+    assert loaded["conv-1"]["update_time"] == 1711900000
+    assert loaded["conv-2"]["update_time"] == 1711900100
+    assert len(loaded) == 2
+
+
+def test_load_prior_acquisition_returns_empty_when_missing(tmp_path: Path) -> None:
+    assert module.load_prior_acquisition(tmp_path) == {}
+
+
+def test_conversation_payload_cache_roundtrips(tmp_path: Path) -> None:
+    payload = {"conversation_id": "conv-1", "title": "Test", "mapping": {"n1": {}}}
+    path = module.cache_conversation_payload(tmp_path, "conv-1", payload)
+    assert path.exists()
+
+    loaded = module.load_cached_conversation(tmp_path, "conv-1")
+    assert loaded is not None
+    assert loaded["conversation_id"] == "conv-1"
+    assert loaded["mapping"] == {"n1": {}}
+
+
+def test_load_cached_conversation_returns_none_when_missing(tmp_path: Path) -> None:
+    assert module.load_cached_conversation(tmp_path, "nonexistent") is None
+
+
+def test_delta_aware_fetch_reuses_cached_conversations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    jar = tmp_path / "test.binarycookies"
+    jar.write_bytes(
+        build_binary_cookie_jar([{"domain": ".chatgpt.com", "name": "x", "value": "y"}])
+    )
+    output_root = tmp_path / "output"
+
+    # Cache a conversation
+    module.cache_conversation_payload(
+        output_root,
+        "conv-1",
+        {"conversation_id": "conv-1", "title": "Cached", "update_time": 100, "mapping": {}},
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_chatgpt_session",
+        lambda cookie_jar: module.ChatGPTHttpSession(
+            cookies=[],
+            session_payload={"account": {"id": "acct-1"}, "user": {"email": "u@e.com"}},
+            access_token="tok",  # allow-secret
+            account_id="acct-1",
+            device_id="dev-1",
+        ),
+    )
+
+    fetch_calls: list[str] = []
+
+    def fake_fetch_json(session: module.ChatGPTHttpSession, url: str) -> object:
+        if "conversations?" in url:
+            return {
+                "total": 2,
+                "items": [
+                    {"id": "conv-1", "title": "Cached", "update_time": 100},
+                    {"id": "conv-2", "title": "New", "update_time": 200},
+                ],
+            }
+        if "conversation/conv-2" in url:
+            fetch_calls.append("conv-2")
+            return {
+                "conversation_id": "conv-2",
+                "title": "New",
+                "update_time": 200,
+                "mapping": {"n": {}},
+            }
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+
+    prior_state = {"conv-1": {"update_time": 100}}
+    bundle = module.fetch_chatgpt_local_session_bundle(
+        jar,
+        limit=100,
+        prior_state=prior_state,
+        output_root=output_root,
+    )
+
+    assert bundle["reused_count"] == 1
+    assert bundle["fetched_count"] == 1
+    assert bundle["acquisition_report"]["reused_count"] == 1
+    assert bundle["acquisition_report"]["fetched_count"] == 1
+    assert fetch_calls == ["conv-2"]
+    assert len(bundle["conversations"]) == 2
