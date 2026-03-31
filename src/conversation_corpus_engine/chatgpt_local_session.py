@@ -887,7 +887,7 @@ def discover_chatgpt_projects(
     limit = 100
     while True:
         url = (
-            f"https://{CHATGPT_HOST}/backend-api/gizmos/discovery/mine?"
+            f"https://{CHATGPT_HOST}/backend-api/projects?"
             f"{urlencode({'offset': offset, 'limit': limit})}"
         )
         try:

@@ -1151,6 +1151,13 @@ def migrate_review_ids(
             old_id = entry["review_id"]
             subject_ids = entry.get("subject_ids") or []
             review_type = entry.get("review_type", "")
+            if subject_ids and not review_type:
+                # Infer review_type from the key in decisions dictionary
+                for rtype, (akey, rkey) in FEDERATED_REVIEW_TYPES.items():
+                    if key in {akey, rkey}:
+                        review_type = rtype
+                        break
+
             if subject_ids and review_type:
                 new_id = build_review_id(review_type, subject_ids)
                 if old_id != new_id:
@@ -1159,6 +1166,8 @@ def migrate_review_ids(
                     stats["decisions_migrated"] += 1
                 else:
                     stats["unchanged"] += 1
+            else:
+                stats["unchanged"] += 1
 
     mapping_payload = {
         "generated_at": now_iso(),
