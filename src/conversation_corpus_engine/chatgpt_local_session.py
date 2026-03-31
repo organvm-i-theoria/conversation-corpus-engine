@@ -13,9 +13,11 @@ through the backend API.
 Ported from the genesis script: conversation-corpus-site/archive/legacy-scripts/
 export_chatgpt_history.py — the origin of the entire conversation corpus engine.
 """
+
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import struct
 import subprocess
@@ -29,9 +31,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-DEFAULT_CHATGPT_COOKIE_JAR = Path(
-    "/Users/4jp/Library/HTTPStorages/com.openai.chat.binarycookies"
-)
+from .import_chatgpt_export_corpus import extract_node_text, walk_mapping_tree
+
+DEFAULT_CHATGPT_COOKIE_JAR = Path("/Users/4jp/Library/HTTPStorages/com.openai.chat.binarycookies")
 DEFAULT_CHROME_COOKIES = Path.home() / "Library/Application Support/Google/Chrome/Default/Cookies"
 CHROME_SAFE_STORAGE_SERVICES = ("Chrome Safe Storage", "Chromium Safe Storage")
 CHATGPT_COOKIE_HOST = ".chatgpt.com"
@@ -101,8 +103,7 @@ def parse_binary_cookies(path: Path) -> list[Cookie]:
         offset += page_size
         cookie_count = struct.unpack("<I", page[4:8])[0]
         cookie_offsets = [
-            struct.unpack("<I", page[8 + i * 4 : 12 + i * 4])[0]
-            for i in range(cookie_count)
+            struct.unpack("<I", page[8 + i * 4 : 12 + i * 4])[0] for i in range(cookie_count)
         ]
         for cookie_offset in cookie_offsets:
             chunk = page[cookie_offset:]
@@ -140,9 +141,7 @@ def cookie_matches_host(cookie: Cookie, host: str) -> bool:
 def build_cookie_header(cookies: list[Cookie], url: str) -> str:
     host = urlparse(url).hostname or ""
     selected = [
-        f"{cookie.name}={cookie.value}"
-        for cookie in cookies
-        if cookie_matches_host(cookie, host)
+        f"{cookie.name}={cookie.value}" for cookie in cookies if cookie_matches_host(cookie, host)
     ]
     return "; ".join(selected)
 
@@ -240,7 +239,14 @@ def load_chatgpt_cookies_from_chrome(
         combined = "".join(session_parts[k] for k in sorted(session_parts))
         if combined:
             cookies.append(
-                Cookie(CHATGPT_COOKIE_HOST, "__Secure-next-auth.session-token", "/", combined, True, True)
+                Cookie(
+                    CHATGPT_COOKIE_HOST,
+                    "__Secure-next-auth.session-token",
+                    "/",
+                    combined,
+                    True,
+                    True,
+                )
             )
     return cookies
 
@@ -293,27 +299,21 @@ def _request_json(
             f"{error.code} while fetching {url}: {body[:500]}"
         ) from error
     except URLError as error:
-        raise ChatGPTLocalSessionError(
-            f"Network error while fetching {url}: {error}"
-        ) from error
+        raise ChatGPTLocalSessionError(f"Network error while fetching {url}: {error}") from error
 
 
 def _fetch_session(cookies: list[Cookie]) -> dict[str, Any]:
     url = f"https://{CHATGPT_HOST}/api/auth/session"
     payload = _request_json(cookies, url)
     if not isinstance(payload, dict):
-        raise ChatGPTLocalSessionError(
-            "ChatGPT session payload was not a JSON object."
-        )
+        raise ChatGPTLocalSessionError("ChatGPT session payload was not a JSON object.")
     return payload
 
 
 def _session_has_valid_token(payload: dict[str, Any]) -> bool:
     if "accessToken" not in payload:
         return False
-    if payload.get("error") == "RefreshAccessTokenError":
-        return False
-    return True
+    return payload.get("error") != "RefreshAccessTokenError"
 
 
 def _build_session_from_cookies(cookies: list[Cookie]) -> ChatGPTHttpSession | None:
@@ -377,9 +377,7 @@ def _auth_headers(session: ChatGPTHttpSession) -> dict[str, str]:
 
 
 def fetch_json(session: ChatGPTHttpSession, url: str) -> Any:
-    return _request_json(
-        session.cookies, url, extra_headers=_auth_headers(session)
-    )
+    return _request_json(session.cookies, url, extra_headers=_auth_headers(session))
 
 
 # ---------------------------------------------------------------------------
@@ -479,9 +477,7 @@ def scope_preflight_check(
             "message": "No prior acquisition state — cannot assess scope.",
         }
     if prior_count > 0 and conversation_count < prior_count * SCOPE_DEGRADATION_THRESHOLD:
-        delta_pct = round(
-            ((conversation_count - prior_count) / prior_count) * 100, 1
-        )
+        delta_pct = round(((conversation_count - prior_count) / prior_count) * 100, 1)
         msg = (
             f"Session scope degraded: {conversation_count} conversations visible "
             f"(prior: {prior_count}, {delta_pct}%). "
@@ -598,9 +594,7 @@ def fetch_chatgpt_local_session_bundle(
                 continue
 
         try:
-            detail_url = (
-                f"https://{CHATGPT_HOST}/backend-api/conversation/{conversation_id}"
-            )
+            detail_url = f"https://{CHATGPT_HOST}/backend-api/conversation/{conversation_id}"
             detail = fetch_json(session, detail_url)
             normalized = _normalize_conversation_detail(detail)
             conversations_json.append(normalized)
@@ -655,11 +649,6 @@ def fetch_chatgpt_project(
     cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
 ) -> dict[str, Any]:
     """Extract a ChatGPT Project's files and conversations to a local directory."""
-    import re
-
-
-    from .import_chatgpt_export_corpus import walk_mapping_tree, extract_node_text
-
     session = build_chatgpt_session(cookie_jar)
     output_root = output_root.resolve()
 
@@ -670,9 +659,7 @@ def fetch_chatgpt_project(
 
     meta_dir = output_root / "metadata"
     meta_dir.mkdir(parents=True, exist_ok=True)
-    (meta_dir / "project.json").write_text(
-        json.dumps(project, indent=2) + "\n", encoding="utf-8"
-    )
+    (meta_dir / "project.json").write_text(json.dumps(project, indent=2) + "\n", encoding="utf-8")
 
     files_dir = output_root / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
@@ -879,7 +866,6 @@ def discover_chatgpt_projects(
 ) -> dict[str, dict[str, Any]]:
     """Fetch all ChatGPT project metadata from the API. Returns {project_id: info}."""
 
-
     session = build_chatgpt_session(cookie_jar)
     # ChatGPT "gizmos" API returns projects as gizmo entries with resource_type "project"
     projects: dict[str, dict[str, Any]] = {}
@@ -989,15 +975,13 @@ def sync_chatgpt_projects(
     Returns a summary of what was extracted, skipped, and failed.
     """
 
-
     registry = load_project_registry(project_root)
     projects = registry.get("projects") or {}
 
     candidates = [
         (pid, entry)
         for pid, entry in projects.items()
-        if entry.get("extraction_state") in ("queued", "partial")
-        and entry.get("route")
+        if entry.get("extraction_state") in ("queued", "partial") and entry.get("route")
     ]
 
     extracted: list[dict[str, Any]] = []
@@ -1012,9 +996,7 @@ def sync_chatgpt_projects(
         save_project_registry(project_root, registry)
 
         try:
-            manifest = fetch_chatgpt_project(
-                pid, destination, cookie_jar=cookie_jar
-            )
+            manifest = fetch_chatgpt_project(pid, destination, cookie_jar=cookie_jar)
             entry["extraction_state"] = "delivered"
             entry["extracted_at"] = now_iso()
             entry["extraction_manifest"] = {
