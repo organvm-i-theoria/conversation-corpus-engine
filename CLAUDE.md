@@ -81,9 +81,11 @@ Providers: `chatgpt`, `claude`, `gemini`, `grok`, `perplexity`, `copilot`, `deep
 
 ### Project Root Directories
 
-- `state/` — mutable operational state: federation registry, federated review queue, canonical decisions
+- `state/` — mutable operational state: federation registry, federated review queue, canonical decisions, testaments
 - `reports/` — generated readiness reports, `surfaces/` subdirectory for Meta/MCP exports
 - `federation/` — materialized cross-corpus federated indices (families, entities, actions, doctrine briefs, conflict reports, lineage maps)
+- `playbooks/` — operational runbooks: provider onboarding, review campaigns, scope recovery, agent handoffs (`handoffs/` subdirectory)
+- `templates/` — testament event schema, session canon template
 - `promotion-policy.json` — live promotion threshold config at repo root
 
 ### Module Relationships
