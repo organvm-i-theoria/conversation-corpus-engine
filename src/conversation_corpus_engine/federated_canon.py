@@ -468,7 +468,17 @@ def contradiction_signal(left: dict[str, Any], right: dict[str, Any]) -> float:
     return 0.0
 
 
+def _subject_fingerprint(subject_ids: list[str]) -> str:
+    return sha1(decision_subject_key(subject_ids).encode("utf-8")).hexdigest()[:8]
+
+
 def build_review_id(review_type: str, subject_ids: list[str]) -> str:
+    base = f"federated-{review_type}-{slugify(' '.join(subject_ids), limit=80)}"
+    return f"{base}-{_subject_fingerprint(subject_ids)}"
+
+
+def build_review_id_legacy(review_type: str, subject_ids: list[str]) -> str:
+    """Pre-migration ID format without fingerprint suffix. Used for mapping."""
     return f"federated-{review_type}-{slugify(' '.join(subject_ids), limit=80)}"
 
 
@@ -478,9 +488,7 @@ def stabilize_review_ids(suggestions: list[dict[str, Any]]) -> None:
         review_id = item["review_id"]
         if review_id_counts[review_id] <= 1:
             continue
-        fingerprint = sha1(decision_subject_key(item.get("subject_ids") or []).encode("utf-8")).hexdigest()[
-            :8
-        ]
+        fingerprint = _subject_fingerprint(item.get("subject_ids") or [])
         item["review_id"] = f"{review_id}-{fingerprint}"
 
 
@@ -1072,3 +1080,101 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
         "review_queue_path": str(fed_dir / "review-queue.json"),
         "review_history_path": str(fed_dir / "review-history.json"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Review-ID migration: add fingerprint suffix to all IDs
+# ---------------------------------------------------------------------------
+
+
+def _migrate_item_id(item: dict[str, Any]) -> tuple[str, str]:
+    """Compute the new fingerprinted review_id for an item. Returns (old_id, new_id)."""
+    old_id = item.get("review_id", "")
+    subject_ids = item.get("subject_ids") or []
+    review_type = item.get("review_type", "")
+    if not subject_ids or not review_type:
+        return old_id, old_id
+    new_id = build_review_id(review_type, subject_ids)
+    return old_id, new_id
+
+
+def migrate_review_ids(
+    project_root: Path,
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Migrate all review IDs to the fingerprinted format.
+
+    Updates queue, history, and decisions in-place. Writes a mapping file
+    to state/review-id-mapping.json for audit trail.
+    """
+    state_dir = project_root / "state"
+    queue_path = state_dir / "federated-review-queue.json"
+    history_path = state_dir / "federated-review-history.json"
+    decisions_path = state_dir / "federated-canonical-decisions.json"
+    mapping_path = state_dir / "review-id-mapping.json"
+
+    queue = load_json(queue_path, default={"items": []}) or {"items": []}
+    history = load_json(history_path, default={"items": []}) or {"items": []}
+    decisions = load_json(decisions_path, default=DEFAULT_FEDERATED_DECISIONS.copy()) or (
+        DEFAULT_FEDERATED_DECISIONS.copy()
+    )
+
+    id_mapping: dict[str, str] = {}
+    stats = {"queue_migrated": 0, "history_migrated": 0, "decisions_migrated": 0, "unchanged": 0}
+
+    for item in queue.get("items", []):
+        old_id, new_id = _migrate_item_id(item)
+        if old_id != new_id:
+            id_mapping[old_id] = new_id
+            item["review_id"] = new_id
+            stats["queue_migrated"] += 1
+        else:
+            stats["unchanged"] += 1
+
+    for item in history.get("items", []):
+        old_id, new_id = _migrate_item_id(item)
+        if old_id != new_id:
+            id_mapping.setdefault(old_id, new_id)
+            item["review_id"] = new_id
+            stats["history_migrated"] += 1
+        else:
+            stats["unchanged"] += 1
+
+    for key in decisions:
+        entries = decisions[key]
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict) or "review_id" not in entry:
+                continue
+            old_id = entry["review_id"]
+            subject_ids = entry.get("subject_ids") or []
+            review_type = entry.get("review_type", "")
+            if subject_ids and review_type:
+                new_id = build_review_id(review_type, subject_ids)
+                if old_id != new_id:
+                    id_mapping.setdefault(old_id, new_id)
+                    entry["review_id"] = new_id
+                    stats["decisions_migrated"] += 1
+                else:
+                    stats["unchanged"] += 1
+
+    mapping_payload = {
+        "generated_at": now_iso(),
+        "migration": "review-id-fingerprint-v1",
+        "stats": stats,
+        "id_count": len(id_mapping),
+        "mapping": id_mapping,
+    }
+
+    if not dry_run:
+        queue["generated_at"] = now_iso()
+        history["generated_at"] = now_iso()
+        decisions["generated_at"] = now_iso()
+        write_json(queue_path, queue)
+        write_json(history_path, history)
+        write_json(decisions_path, decisions)
+        write_json(mapping_path, mapping_payload)
+
+    return mapping_payload

@@ -1,0 +1,53 @@
+{
+  "$schema": "testament-event-v1",
+  "session_id": "S37",
+  "session_date": "2026-03-25",
+  "repo": "conversation-corpus-engine",
+  "organ": "ORGAN-I",
+  "summary": "Review-assist campaign system: 13 new CLI commands, entity-alias workflow, packet sampling/proposal/comparison, campaign indexing/rollups/scoreboards, reject-stage, apply-plan. Queue 4272 to 406.",
+  "commits": {
+    "first": "350567c",
+    "last": "3fa116f",
+    "count": 4
+  },
+  "test_state": {
+    "before": 86,
+    "after": 254
+  },
+  "modules_added": [],
+  "modules_modified": [
+    "triage.py",
+    "federated_canon.py",
+    "cli.py"
+  ],
+  "capabilities_shipped": [
+    "review-assist campaign system (13 new CLI subcommands)",
+    "Entity-alias review-assist with grouped reports",
+    "Packet sampling and proposal sidecars",
+    "Manual/proposal comparison",
+    "Campaign indexing and rollups",
+    "Packet hydration",
+    "Scoreboards",
+    "Reject-stage previews",
+    "Apply-plan contracts (disabled)",
+    "Review-ID collision stabilization (stabilize_review_ids)"
+  ],
+  "issues_closed": [],
+  "issues_opened": [
+    "GH#11 (IRF-CCE-014)",
+    "GH#12 (IRF-CCE-020 → S37 testament)",
+    "GH#13 (IRF-CCE-019 → review-ID migration)",
+    "GH#14 (IRF-CCE-015 → omega ratification)"
+  ],
+  "cross_repo_propagation": [
+    "meta-organvm/organvm-corpvs-testamentvm: runtime archive of Codex session"
+  ],
+  "remaining_work": [
+    "IRF-CCE-019: historical review-ID migration (now addressed in S40)",
+    "IRF-CCE-020: S37 testament recording (addressed here)"
+  ],
+  "operational_findings": [
+    "Review queue reduced from 4,272 to 406 via review-assist campaigns",
+    "Truncated slug collisions affect 40% of review items — fingerprint suffix needed"
+  ]
+}

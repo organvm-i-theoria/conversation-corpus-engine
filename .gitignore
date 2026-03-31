@@ -7,8 +7,10 @@ __pycache__/
 build/
 dist/
 .DS_Store
+.serena/
 
 /federation/
 /reports/
-/state/
+/state/*
+!/state/testaments/
 /source-drop/

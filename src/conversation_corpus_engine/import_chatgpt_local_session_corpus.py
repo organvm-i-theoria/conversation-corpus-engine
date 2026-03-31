@@ -21,6 +21,7 @@ from .chatgpt_local_session import (
     load_prior_acquisition,
     now_iso,
     save_acquisition_state,
+    scope_preflight_check,
 )
 from .import_chatgpt_export_corpus import import_chatgpt_export_corpus
 from .source_lifecycle import build_source_snapshot
@@ -128,6 +129,8 @@ def import_chatgpt_local_session_corpus(
     output_root = output_root.resolve()
     discovery = discover_chatgpt_local_session(cookie_jar)
 
+    preflight = scope_preflight_check(discovery["conversation_count"], output_root)
+
     prior_state = load_prior_acquisition(output_root)
     bundle = fetch_chatgpt_local_session_bundle(
         cookie_jar,
@@ -191,4 +194,5 @@ def import_chatgpt_local_session_corpus(
         bundle.get("conversation_detail_failures") or []
     )
     result["acquisition_report"] = bundle.get("acquisition_report")
+    result["scope_preflight"] = preflight
     return result

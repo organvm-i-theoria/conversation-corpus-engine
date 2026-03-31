@@ -153,6 +153,15 @@ def build_parser() -> argparse.ArgumentParser:
     migration_seed.add_argument("--project-root", type=Path, default=default_project_root())
     migration_seed.add_argument("--prefer-default", default="chatgpt-history")
 
+    migration_review_ids = migration_sub.add_parser(
+        "review-ids", help="Migrate review IDs to fingerprinted format"
+    )
+    migration_review_ids.add_argument(
+        "--project-root", type=Path, default=default_project_root()
+    )
+    migration_review_ids.add_argument("--dry-run", action="store_true")
+    migration_review_ids.add_argument("--json", action="store_true")
+
     provider = subparsers.add_parser("provider", help="Inspect provider intake and readiness")
     provider_sub = provider.add_subparsers(dest="action", required=True)
     provider_discover = provider_sub.add_parser(
@@ -716,6 +725,22 @@ def main() -> None:
             prefer_default=args.prefer_default,
         )
         print(json.dumps(result, indent=2))
+        return
+
+    if args.group == "migration" and args.action == "review-ids":
+        from .federated_canon import migrate_review_ids  # noqa: PLC0415
+
+        result = migrate_review_ids(args.project_root, dry_run=args.dry_run)
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            stats = result.get("stats", {})
+            print(f"Review-ID migration {'(dry run)' if args.dry_run else ''}")
+            print(f"  Queue migrated:     {stats.get('queue_migrated', 0)}")
+            print(f"  History migrated:   {stats.get('history_migrated', 0)}")
+            print(f"  Decisions migrated: {stats.get('decisions_migrated', 0)}")
+            print(f"  Unchanged:          {stats.get('unchanged', 0)}")
+            print(f"  Unique mappings:    {result.get('id_count', 0)}")
         return
 
     if args.group == "provider" and args.action == "discover":

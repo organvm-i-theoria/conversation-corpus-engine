@@ -456,6 +456,49 @@ def save_acquisition_state(
     state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+SCOPE_DEGRADATION_THRESHOLD = 0.5  # flag if current count < 50% of prior
+
+
+def scope_preflight_check(
+    conversation_count: int,
+    output_root: Path,
+) -> dict[str, Any]:
+    """Compare current conversation_count against prior acquisition state.
+
+    Returns a status dict: ok, degraded, or unknown (no prior state).
+    Raises ChatGPTLocalSessionError if degraded — prevents importing partial data.
+    """
+    prior = load_prior_acquisition(output_root)
+    prior_count = len(prior)
+    if prior_count == 0:
+        return {
+            "status": "unknown",
+            "current": conversation_count,
+            "prior": 0,
+            "delta_pct": 0.0,
+            "message": "No prior acquisition state — cannot assess scope.",
+        }
+    if prior_count > 0 and conversation_count < prior_count * SCOPE_DEGRADATION_THRESHOLD:
+        delta_pct = round(
+            ((conversation_count - prior_count) / prior_count) * 100, 1
+        )
+        msg = (
+            f"Session scope degraded: {conversation_count} conversations visible "
+            f"(prior: {prior_count}, {delta_pct}%). "
+            f"Re-launch the ChatGPT desktop app and sign in fresh. "
+            f"See playbooks/scope-recovery.md."
+        )
+        raise ChatGPTLocalSessionError(msg)
+    delta_pct = round(((conversation_count - prior_count) / prior_count) * 100, 1)
+    return {
+        "status": "ok",
+        "current": conversation_count,
+        "prior": prior_count,
+        "delta_pct": delta_pct,
+        "message": f"Scope OK: {conversation_count} conversations (prior: {prior_count}).",
+    }
+
+
 def cache_conversation_payload(
     output_root: Path, conversation_id: str, payload: dict[str, Any]
 ) -> Path:

@@ -409,7 +409,10 @@ def test_resolve_federated_review_item_moves_pair_between_decision_buckets(tmp_p
     assert stored_decisions["rejected_family_merges"][0]["review_id"] == "family-review-001"
 
 
-def test_build_pair_suggestions_disambiguates_colliding_review_ids() -> None:
+def test_build_pair_suggestions_produces_unique_review_ids() -> None:
+    """After the fingerprint migration, build_review_id always produces unique IDs
+    even for subject_ids whose slugs would truncate identically. The legacy behavior
+    (collision → stabilize) is no longer needed for new IDs."""
     left = {
         "member_id": "claude-history-memory:entity-collision",
         "corpus_id": "claude-history-memory",
@@ -428,15 +431,27 @@ def test_build_pair_suggestions_disambiguates_colliding_review_ids() -> None:
         "canonical_label": "Storylines",
         "aliases": [],
     }
-    base_storyline = MODULE.build_review_id(
+    id_storyline = MODULE.build_review_id(
         "entity-alias",
         [left["member_id"], right_storyline["member_id"]],
     )
-    base_storylines = MODULE.build_review_id(
+    id_storylines = MODULE.build_review_id(
         "entity-alias",
         [left["member_id"], right_storylines["member_id"]],
     )
-    assert base_storyline == base_storylines
+    # Fingerprint suffix makes them unique even when slug portion truncates identically
+    assert id_storyline != id_storylines
+
+    # Legacy format would have collided
+    legacy_a = MODULE.build_review_id_legacy(
+        "entity-alias",
+        [left["member_id"], right_storyline["member_id"]],
+    )
+    legacy_b = MODULE.build_review_id_legacy(
+        "entity-alias",
+        [left["member_id"], right_storylines["member_id"]],
+    )
+    assert legacy_a == legacy_b  # confirms the old collision existed
 
     suggestions = MODULE.build_pair_suggestions(
         [left, right_storyline, right_storylines],
@@ -449,4 +464,100 @@ def test_build_pair_suggestions_disambiguates_colliding_review_ids() -> None:
     assert len(suggestions) == 2
     review_ids = [item["review_id"] for item in suggestions]
     assert len(set(review_ids)) == 2
-    assert all(review_id.startswith(f"{base_storyline}-") for review_id in review_ids)
+
+
+# ---------------------------------------------------------------------------
+# Review-ID migration tests
+# ---------------------------------------------------------------------------
+
+
+class TestMigrateReviewIds:
+    def _seed_state(self, project_root: Path, items: list[dict[str, Any]]) -> None:
+        state_dir = project_root / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        queue = {"generated_at": None, "open_count": len(items), "items": list(items)}
+        history = {"generated_at": None, "items": list(items)}
+        decisions: dict[str, Any] = {
+            "generated_at": None,
+            **MODULE.DEFAULT_FEDERATED_DECISIONS,
+        }
+        for item in items:
+            rt = item.get("review_type", "entity-alias")
+            accepted_key = MODULE.FEDERATED_REVIEW_TYPES[rt][0]
+            decisions[accepted_key].append(dict(item))
+        _write_json(state_dir / "federated-review-queue.json", queue)
+        _write_json(state_dir / "federated-review-history.json", history)
+        _write_json(state_dir / "federated-canonical-decisions.json", decisions)
+
+    def test_migration_adds_fingerprints(self, tmp_path: Path) -> None:
+        items = [
+            {
+                "review_id": "federated-entity-alias-old-slug",
+                "review_type": "entity-alias",
+                "subject_ids": ["corpus-a:entity-1", "corpus-b:entity-2"],
+                "status": "pending",
+            },
+        ]
+        self._seed_state(tmp_path, items)
+        result = MODULE.migrate_review_ids(tmp_path)
+        assert result["stats"]["queue_migrated"] >= 1
+        assert result["stats"]["history_migrated"] >= 1
+        assert result["id_count"] >= 1
+        mapping_path = tmp_path / "state" / "review-id-mapping.json"
+        assert mapping_path.exists()
+
+    def test_migration_resolves_collisions(self, tmp_path: Path) -> None:
+        items = [
+            {
+                "review_id": "federated-entity-alias-same-slug",
+                "review_type": "entity-alias",
+                "subject_ids": ["corpus-a:entity-alpha", "corpus-b:entity-beta"],
+                "status": "pending",
+            },
+            {
+                "review_id": "federated-entity-alias-same-slug",
+                "review_type": "entity-alias",
+                "subject_ids": ["corpus-a:entity-gamma", "corpus-b:entity-delta"],
+                "status": "pending",
+            },
+        ]
+        self._seed_state(tmp_path, items)
+        MODULE.migrate_review_ids(tmp_path)
+        queue = json.loads(
+            (tmp_path / "state" / "federated-review-queue.json").read_text()
+        )
+        new_ids = [i["review_id"] for i in queue["items"]]
+        assert len(set(new_ids)) == 2, f"Expected unique IDs after migration, got {new_ids}"
+
+    def test_dry_run_does_not_modify_files(self, tmp_path: Path) -> None:
+        items = [
+            {
+                "review_id": "federated-entity-alias-dry",
+                "review_type": "entity-alias",
+                "subject_ids": ["corpus-a:entity-1", "corpus-b:entity-2"],
+                "status": "pending",
+            },
+        ]
+        self._seed_state(tmp_path, items)
+        queue_before = (tmp_path / "state" / "federated-review-queue.json").read_text()
+        result = MODULE.migrate_review_ids(tmp_path, dry_run=True)
+        queue_after = (tmp_path / "state" / "federated-review-queue.json").read_text()
+        assert queue_before == queue_after
+        assert not (tmp_path / "state" / "review-id-mapping.json").exists()
+        assert result["id_count"] >= 1
+
+    def test_already_migrated_items_unchanged(self, tmp_path: Path) -> None:
+        subject_ids = ["corpus-a:entity-1", "corpus-b:entity-2"]
+        new_id = MODULE.build_review_id("entity-alias", subject_ids)
+        items = [
+            {
+                "review_id": new_id,
+                "review_type": "entity-alias",
+                "subject_ids": subject_ids,
+                "status": "pending",
+            },
+        ]
+        self._seed_state(tmp_path, items)
+        result = MODULE.migrate_review_ids(tmp_path)
+        assert result["stats"]["queue_migrated"] == 0
+        assert result["stats"]["unchanged"] >= 1

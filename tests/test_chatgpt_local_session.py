@@ -9,6 +9,65 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine import chatgpt_local_session as module  # noqa: E402
+from conversation_corpus_engine.chatgpt_local_session import (
+    ChatGPTLocalSessionError,
+    scope_preflight_check,
+)
+
+
+def _seed_acquisition_state(output_root: Path, conversation_count: int) -> None:
+    """Write a minimal acquisition-state.json with N conversations."""
+    import json  # noqa: PLC0415
+
+    state_dir = output_root / "source"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    convs = {f"conv-{i}": {"update_time": i} for i in range(conversation_count)}
+    payload = {
+        "generated_at": "2026-01-01T00:00:00+00:00",
+        "conversation_count": conversation_count,
+        "conversations": convs,
+        "last_acquisition_report": {},
+    }
+    (state_dir / "acquisition-state.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8"
+    )
+
+
+class TestScopePreflightCheck:
+    def test_ok_when_count_within_threshold(self, tmp_path: Path) -> None:
+        _seed_acquisition_state(tmp_path, 100)
+        result = scope_preflight_check(90, tmp_path)
+        assert result["status"] == "ok"
+        assert result["current"] == 90
+        assert result["prior"] == 100
+        assert result["delta_pct"] == -10.0
+
+    def test_unknown_when_no_prior_state(self, tmp_path: Path) -> None:
+        result = scope_preflight_check(50, tmp_path)
+        assert result["status"] == "unknown"
+        assert result["current"] == 50
+        assert result["prior"] == 0
+
+    def test_degraded_raises_when_below_threshold(self, tmp_path: Path) -> None:
+        _seed_acquisition_state(tmp_path, 633)
+        with pytest.raises(ChatGPTLocalSessionError, match="Session scope degraded"):
+            scope_preflight_check(4, tmp_path)
+
+    def test_ok_when_count_grows(self, tmp_path: Path) -> None:
+        _seed_acquisition_state(tmp_path, 100)
+        result = scope_preflight_check(150, tmp_path)
+        assert result["status"] == "ok"
+        assert result["delta_pct"] == 50.0
+
+    def test_ok_at_exact_threshold_boundary(self, tmp_path: Path) -> None:
+        _seed_acquisition_state(tmp_path, 100)
+        result = scope_preflight_check(50, tmp_path)
+        assert result["status"] == "ok"
+
+    def test_degraded_just_below_threshold(self, tmp_path: Path) -> None:
+        _seed_acquisition_state(tmp_path, 100)
+        with pytest.raises(ChatGPTLocalSessionError):
+            scope_preflight_check(49, tmp_path)
 
 
 def build_binary_cookie_jar(cookies: list[dict[str, str]]) -> bytes:
