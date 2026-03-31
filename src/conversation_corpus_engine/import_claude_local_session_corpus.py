@@ -12,6 +12,8 @@ from .claude_local_session import (
     DEFAULT_CLAUDE_LOCAL_ROOT,
     discover_claude_local_session,
     fetch_claude_local_session_bundle,
+    load_prior_acquisition,
+    save_acquisition_state,
 )
 from .import_claude_export_corpus import import_claude_export_corpus, now_iso
 from .source_lifecycle import build_source_snapshot
@@ -140,7 +142,27 @@ def import_claude_local_session_corpus(
 ) -> dict[str, Any]:
     local_root = local_root.resolve()
     discovery = discover_claude_local_session(local_root)
-    bundle = fetch_claude_local_session_bundle(local_root)
+
+    # Delta-aware: load prior state and pass to bundle fetcher
+    prior_state = load_prior_acquisition(output_root)
+    bundle = fetch_claude_local_session_bundle(
+        local_root, prior_state=prior_state, output_root=output_root
+    )
+
+    # Persist acquisition state for delta-sync on next run
+    conversations_state: dict[str, dict[str, Any]] = {}
+    for conv in bundle.get("conversations") or []:
+        cuuid = conv.get("uuid")
+        if cuuid:
+            conversations_state[cuuid] = {
+                "updated_at": conv.get("updated_at"),
+                "fetched_at": now_iso(),
+            }
+    save_acquisition_state(
+        output_root,
+        conversations_state,
+        report=bundle.get("acquisition_report") or {},
+    )
 
     with tempfile.TemporaryDirectory(prefix="claude-local-session-") as tmpdir:
         bundle_root = Path(tmpdir) / "claude-local-bundle"

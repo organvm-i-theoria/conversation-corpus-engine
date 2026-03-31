@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import struct
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -313,6 +311,177 @@ def test_conversation_payload_cache_roundtrips(tmp_path: Path) -> None:
 
 def test_load_cached_conversation_returns_none_when_missing(tmp_path: Path) -> None:
     assert module.load_cached_conversation(tmp_path, "nonexistent") is None
+
+
+# ---------------------------------------------------------------------------
+# Project registry tests
+# ---------------------------------------------------------------------------
+
+
+def test_project_registry_roundtrips(tmp_path: Path) -> None:
+    registry = module.load_project_registry(tmp_path)
+    assert registry["project_count"] == 0
+    assert registry["projects"] == {}
+
+    registry["projects"]["g-p-abc"] = module._blank_project_entry("g-p-abc", "test-proj", 10, 3)
+    path = module.save_project_registry(tmp_path, registry)
+    assert path.exists()
+
+    loaded = module.load_project_registry(tmp_path)
+    assert loaded["project_count"] == 1
+    assert loaded["projects"]["g-p-abc"]["name"] == "test-proj"
+    assert loaded["projects"]["g-p-abc"]["extraction_state"] == "discovered"
+
+
+def test_load_project_registry_handles_corrupt_json(tmp_path: Path) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "chatgpt-project-registry.json").write_text("NOT JSON")
+    registry = module.load_project_registry(tmp_path)
+    assert registry["project_count"] == 0
+
+
+def test_merge_project_discovery_preserves_extraction_state() -> None:
+    existing = {
+        "generated_at": "old",
+        "account_id": "acct-1",
+        "project_count": 1,
+        "projects": {
+            "g-p-aaa": {
+                "name": "old-name",
+                "interactions": 5,
+                "file_count": 2,
+                "discovered_at": "old",
+                "extraction_state": "delivered",
+                "extracted_at": "2026-01-01",
+                "extraction_manifest": {"files_extracted": 2},
+                "route": {"destination": "/some/path"},
+            },
+        },
+    }
+    discovered = {
+        "g-p-aaa": {"name": "new-name", "interactions": 15, "file_count": 4},
+        "g-p-bbb": {"name": "brand-new", "interactions": 3, "file_count": 0},
+    }
+
+    result = module.merge_project_discovery(existing, discovered)
+
+    # Existing project: name/interactions updated, extraction_state preserved
+    assert result["projects"]["g-p-aaa"]["name"] == "new-name"
+    assert result["projects"]["g-p-aaa"]["interactions"] == 15
+    assert result["projects"]["g-p-aaa"]["extraction_state"] == "delivered"
+    assert result["projects"]["g-p-aaa"]["extraction_manifest"] == {"files_extracted": 2}
+
+    # New project: blank entry
+    assert result["projects"]["g-p-bbb"]["name"] == "brand-new"
+    assert result["projects"]["g-p-bbb"]["extraction_state"] == "discovered"
+    assert result["project_count"] == 2
+
+
+def test_set_project_route_updates_registry(tmp_path: Path) -> None:
+    registry = module.load_project_registry(tmp_path)
+    registry["projects"]["g-p-aaa"] = module._blank_project_entry("g-p-aaa", "test", 5, 2)
+    module.save_project_registry(tmp_path, registry)
+
+    entry = module.set_project_route(
+        tmp_path, "g-p-aaa", "/dest/path", organ="ORGAN-III", repo="my-repo"
+    )
+
+    assert entry["route"]["destination"] == "/dest/path"
+    assert entry["route"]["organ"] == "ORGAN-III"
+    assert entry["extraction_state"] == "queued"
+
+    # Verify it persisted
+    loaded = module.load_project_registry(tmp_path)
+    assert loaded["projects"]["g-p-aaa"]["extraction_state"] == "queued"
+
+
+def test_set_project_route_raises_for_unknown_project(tmp_path: Path) -> None:
+    module.save_project_registry(tmp_path, {"projects": {}, "project_count": 0})
+    with pytest.raises(module.ChatGPTLocalSessionError, match="not in registry"):
+        module.set_project_route(tmp_path, "g-p-missing", "/dest")
+
+
+def test_render_project_status_empty() -> None:
+    text = module.render_project_status({"projects": {}})
+    assert "No projects" in text
+
+
+def test_render_project_status_shows_breakdown() -> None:
+    registry = {
+        "projects": {
+            "g-p-a": {"name": "alpha", "extraction_state": "discovered"},
+            "g-p-b": {
+                "name": "beta",
+                "extraction_state": "delivered",
+                "route": {"destination": "/out/beta"},
+            },
+            "g-p-c": {"name": "gamma", "extraction_state": "queued", "route": {}},
+        },
+    }
+    text = module.render_project_status(registry)
+    assert "Projects: 3" in text
+    assert "discovered: 1" in text
+    assert "delivered: 1" in text
+    assert "queued: 1" in text
+    assert "alpha" in text
+    assert "beta" in text
+
+
+def test_sync_chatgpt_projects_extracts_queued(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Set up registry with one queued project
+    registry = {
+        "generated_at": "old",
+        "account_id": "",
+        "project_count": 2,
+        "projects": {
+            "g-p-aaa": {
+                "name": "queued-proj",
+                "interactions": 5,
+                "file_count": 2,
+                "discovered_at": "old",
+                "extraction_state": "queued",
+                "extracted_at": None,
+                "extraction_manifest": None,
+                "route": {"destination": str(tmp_path / "output-aaa"), "organ": "", "repo": ""},
+            },
+            "g-p-bbb": {
+                "name": "discovered-only",
+                "interactions": 3,
+                "file_count": 0,
+                "discovered_at": "old",
+                "extraction_state": "discovered",
+                "extracted_at": None,
+                "extraction_manifest": None,
+                "route": None,
+            },
+        },
+    }
+    module.save_project_registry(tmp_path, registry)
+
+    monkeypatch.setattr(
+        module,
+        "fetch_chatgpt_project",
+        lambda pid, dest, cookie_jar=None: {
+            "project_name": "queued-proj",
+            "file_count": 5,
+            "conversation_count": 3,
+            "total_files": 5,
+        },
+    )
+
+    result = module.sync_chatgpt_projects(tmp_path, batch_size=10)
+
+    assert result["extracted_count"] == 1
+    assert result["failed_count"] == 0
+    # g-p-bbb has no route, so not a candidate
+    assert result["candidates_total"] == 1
+
+    loaded = module.load_project_registry(tmp_path)
+    assert loaded["projects"]["g-p-aaa"]["extraction_state"] == "delivered"
+    assert loaded["projects"]["g-p-aaa"]["extraction_manifest"]["files_extracted"] == 5
 
 
 def test_delta_aware_fetch_reuses_cached_conversations(

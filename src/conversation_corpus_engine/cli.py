@@ -4,6 +4,16 @@ import argparse
 import json
 from pathlib import Path
 
+from .chatgpt_local_session import (
+    discover_chatgpt_projects,
+    fetch_chatgpt_project,
+    load_project_registry,
+    merge_project_discovery,
+    render_project_status,
+    save_project_registry,
+    set_project_route,
+    sync_chatgpt_projects,
+)
 from .corpus_candidates import (
     corpus_candidate_history_path,
     load_corpus_candidate_manifest,
@@ -31,7 +41,6 @@ from .governance_policy import load_or_create_promotion_policy
 from .governance_replay import build_policy_replay_payload, write_policy_replay_artifacts
 from .migration import seed_registry_from_staging
 from .paths import default_project_root
-from .chatgpt_local_session import fetch_chatgpt_project
 from .provider_catalog import default_source_drop_root
 from .provider_discovery import discover_provider_uploads, render_provider_discovery_text
 from .provider_import import import_provider_corpus
@@ -59,46 +68,46 @@ from .surface_exports import (
 )
 from .triage import (
     STANDARD_ENTITY_ALIAS_REVIEW_CAMPAIGN_SCENARIOS,
-    build_entity_alias_review_assist,
+    build_entity_alias_reject_stage,
     build_entity_alias_review_apply_plan,
+    build_entity_alias_review_assist,
     build_entity_alias_review_campaign,
     build_entity_alias_review_campaign_index,
     build_entity_alias_review_rollup,
     build_entity_alias_review_scoreboard,
-    build_entity_alias_reject_stage,
     build_triage_plan,
     compare_entity_alias_review_sample_to_proposal,
     execute_triage_plan,
     filter_entity_alias_review_assist_groups,
     hydrate_entity_alias_review_sample_packet,
     propose_entity_alias_review_sample,
-    render_entity_alias_review_apply_plan,
     render_entity_alias_reject_stage,
+    render_entity_alias_review_apply_plan,
+    render_entity_alias_review_assist,
     render_entity_alias_review_campaign,
     render_entity_alias_review_campaign_index,
-    render_entity_alias_review_rollup,
-    render_entity_alias_review_scoreboard,
     render_entity_alias_review_packet_hydration,
+    render_entity_alias_review_rollup,
+    render_entity_alias_review_sample,
     render_entity_alias_review_sample_comparison,
     render_entity_alias_review_sample_proposal,
     render_entity_alias_review_sample_summary,
-    render_entity_alias_review_sample,
-    render_entity_alias_review_assist,
+    render_entity_alias_review_scoreboard,
     sample_entity_alias_review_assist_groups,
     select_entity_alias_review_assist_batch,
     summarize_entity_alias_review_sample,
+    write_entity_alias_reject_stage_artifacts,
+    write_entity_alias_review_apply_plan_artifacts,
     write_entity_alias_review_assist_artifacts,
     write_entity_alias_review_campaign_artifacts,
     write_entity_alias_review_campaign_index_artifacts,
-    write_entity_alias_review_rollup_artifacts,
-    write_entity_alias_reject_stage_artifacts,
-    write_entity_alias_review_apply_plan_artifacts,
     write_entity_alias_review_packet_hydration_artifacts,
-    write_entity_alias_review_scoreboard_artifacts,
+    write_entity_alias_review_rollup_artifacts,
     write_entity_alias_review_sample_artifacts,
     write_entity_alias_review_sample_comparison_artifacts,
     write_entity_alias_review_sample_proposal_artifacts,
     write_entity_alias_review_sample_summary_artifacts,
+    write_entity_alias_review_scoreboard_artifacts,
 )
 
 
@@ -241,7 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
     provider_refresh.add_argument("--note", default="")
     provider_refresh.add_argument("--json", action="store_true")
 
-    project = subparsers.add_parser("project", help="Extract ChatGPT project files and conversations")
+    project = subparsers.add_parser("project", help="ChatGPT project extraction and lifecycle")
     project_sub = project.add_subparsers(dest="action", required=True)
     project_extract = project_sub.add_parser(
         "extract", help="Extract a ChatGPT project's files and conversations to a local directory"
@@ -249,6 +258,29 @@ def build_parser() -> argparse.ArgumentParser:
     project_extract.add_argument("--project-id", required=True, help="ChatGPT project ID (g-p-...)")
     project_extract.add_argument("--output", type=Path, required=True, help="Output directory")
     project_extract.add_argument("--json", action="store_true")
+    project_discover = project_sub.add_parser(
+        "discover", help="Scan ChatGPT projects and update the registry"
+    )
+    project_discover.add_argument("--project-root", type=Path, default=default_project_root())
+    project_discover.add_argument("--json", action="store_true")
+    project_status = project_sub.add_parser("status", help="Show project extraction status")
+    project_status.add_argument("--project-root", type=Path, default=default_project_root())
+    project_status.add_argument("--json", action="store_true")
+    project_route = project_sub.add_parser(
+        "route", help="Set the delivery destination for a project"
+    )
+    project_route.add_argument("--project-id", required=True, help="ChatGPT project ID (g-p-...)")
+    project_route.add_argument("--destination", required=True, help="Output directory path")
+    project_route.add_argument("--organ", default="", help="Target organ (e.g. ORGAN-III)")
+    project_route.add_argument("--repo", default="", help="Target repo name")
+    project_route.add_argument("--project-root", type=Path, default=default_project_root())
+    project_route.add_argument("--json", action="store_true")
+    project_sync = project_sub.add_parser(
+        "sync", help="Extract queued projects to their routed destinations"
+    )
+    project_sync.add_argument("--project-root", type=Path, default=default_project_root())
+    project_sync.add_argument("--batch-size", type=int, default=5)
+    project_sync.add_argument("--json", action="store_true")
 
     schema = subparsers.add_parser("schema", help="Inspect and validate published artifact schemas")
     schema_sub = schema.add_subparsers(dest="action", required=True)
@@ -767,6 +799,52 @@ def main() -> None:
         print(f"Output: {payload['output_root']}")
         print(f"Files: {payload['file_count']}/{payload['total_files']}")
         print(f"Conversations: {payload['conversation_count']}")
+        return
+
+    if args.group == "project" and args.action == "discover":
+        discovered = discover_chatgpt_projects()
+        registry = load_project_registry(args.project_root)
+        registry = merge_project_discovery(registry, discovered)
+        path = save_project_registry(args.project_root, registry)
+        if args.json:
+            print(json.dumps(registry, indent=2))
+            return
+        print(f"Discovered {len(discovered)} projects, registry has {registry['project_count']}")
+        print(f"Written to: {path}")
+        return
+
+    if args.group == "project" and args.action == "status":
+        registry = load_project_registry(args.project_root)
+        if args.json:
+            print(json.dumps(registry, indent=2))
+            return
+        print(render_project_status(registry))
+        return
+
+    if args.group == "project" and args.action == "route":
+        entry = set_project_route(
+            args.project_root,
+            args.project_id,
+            args.destination,
+            organ=args.organ,
+            repo=args.repo,
+        )
+        if args.json:
+            print(json.dumps(entry, indent=2))
+            return
+        print(f"Routed {args.project_id} -> {args.destination}")
+        return
+
+    if args.group == "project" and args.action == "sync":
+        payload = sync_chatgpt_projects(
+            args.project_root, batch_size=args.batch_size
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2))
+            return
+        print(f"Extracted: {payload['extracted_count']}")
+        print(f"Failed: {payload['failed_count']}")
+        print(f"Remaining: {payload['skipped_count']}")
         return
 
     if args.group == "schema" and args.action == "list":

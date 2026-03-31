@@ -324,6 +324,103 @@ def test_fetch_claude_local_session_bundle_collects_details_and_failures(
     assert bundle["cookie_names"] == ["lastActiveOrg", "sessionKey"]
 
 
+# ---------------------------------------------------------------------------
+# Delta-sync / acquisition state tests
+# ---------------------------------------------------------------------------
+
+
+def test_acquisition_state_persistence_roundtrips(tmp_path: Path) -> None:
+    conversations = {
+        "conv-aaa": {"updated_at": "2026-03-25T00:00:00Z", "fetched_at": "2026-03-25T00:00:00Z"},
+        "conv-bbb": {"updated_at": "2026-03-25T01:00:00Z", "fetched_at": "2026-03-25T01:00:00Z"},
+    }
+    report = {"fetched_count": 2, "reused_count": 0}
+    module.save_acquisition_state(tmp_path, conversations, report=report)
+    loaded = module.load_prior_acquisition(tmp_path)
+
+    assert loaded["conv-aaa"]["updated_at"] == "2026-03-25T00:00:00Z"
+    assert loaded["conv-bbb"]["updated_at"] == "2026-03-25T01:00:00Z"
+    assert len(loaded) == 2
+
+
+def test_load_prior_acquisition_returns_empty_when_missing(tmp_path: Path) -> None:
+    assert module.load_prior_acquisition(tmp_path) == {}
+
+
+def test_conversation_payload_cache_roundtrips(tmp_path: Path) -> None:
+    payload = {"uuid": "conv-aaa", "chat_messages": [{"text": "hello"}]}
+    path = module.cache_conversation_payload(tmp_path, "conv-aaa", payload)
+    assert path.exists()
+
+    loaded = module.load_cached_conversation(tmp_path, "conv-aaa")
+    assert loaded is not None
+    assert loaded["uuid"] == "conv-aaa"
+
+
+def test_load_cached_conversation_returns_none_when_missing(tmp_path: Path) -> None:
+    assert module.load_cached_conversation(tmp_path, "nonexistent") is None
+
+
+def test_delta_aware_fetch_reuses_cached_conversations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_root = Path("/tmp/claude")
+    output_root = tmp_path / "output"
+    monkeypatch.setattr(module, "resolve_claude_local_root", lambda path: local_root)
+    monkeypatch.setattr(module, "find_safe_storage_password", lambda: ("Claude Safe Storage", "secret"))
+    monkeypatch.setattr(
+        module,
+        "load_claude_cookies",
+        lambda root, safe_storage_password: {"sessionKey": "session", "lastActiveOrg": "org-1"},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_claude_requests_session",
+        lambda cookies: module.ClaudeHttpSession(headers={}, cookie_header="session"),
+    )
+    monkeypatch.setattr(
+        module,
+        "fetch_claude_bootstrap",
+        lambda session: {"account": {"uuid": "acct-1"}},
+    )
+
+    # Pre-cache conv-1
+    module.cache_conversation_payload(
+        output_root, "conv-1", {"uuid": "conv-1", "chat_messages": [], "updated_at": "T1"}
+    )
+
+    fetch_calls: list[str] = []
+
+    def fake_fetch_json(session: module.ClaudeHttpSession, url: str) -> object:
+        if url.endswith("/organizations"):
+            return [{"uuid": "org-1"}]
+        if url.endswith("/projects"):
+            return []
+        if url.endswith("/chat_conversations"):
+            return [
+                {"uuid": "conv-1", "updated_at": "T1"},
+                {"uuid": "conv-2", "updated_at": "T2"},
+            ]
+        if "chat_conversations/conv-2" in url:
+            fetch_calls.append("conv-2")
+            return {"uuid": "conv-2", "chat_messages": [{"text": "new"}], "updated_at": "T2"}
+        raise AssertionError(f"unexpected url: {url}")
+
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+
+    prior_state = {"conv-1": {"updated_at": "T1"}}
+    bundle = module.fetch_claude_local_session_bundle(
+        local_root, prior_state=prior_state, output_root=output_root
+    )
+
+    assert bundle["reused_count"] == 1
+    assert bundle["fetched_count"] == 1
+    assert fetch_calls == ["conv-2"]
+    assert len(bundle["conversations"]) == 2
+    assert bundle["acquisition_report"]["reused_count"] == 1
+    assert bundle["acquisition_report"]["fetched_count"] == 1
+
+
 def test_render_discovery_text_includes_account_line_when_present() -> None:
     text = module.render_discovery_text(
         {

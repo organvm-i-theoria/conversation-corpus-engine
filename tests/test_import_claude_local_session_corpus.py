@@ -200,7 +200,9 @@ def test_import_claude_local_session_corpus_writes_metadata_and_returns_summary(
         ],
     }
     monkeypatch.setattr(module, "discover_claude_local_session", lambda root: discovery)
-    monkeypatch.setattr(module, "fetch_claude_local_session_bundle", lambda root: bundle)
+    monkeypatch.setattr(
+        module, "fetch_claude_local_session_bundle", lambda root, **kwargs: bundle
+    )
 
     result = module.import_claude_local_session_corpus(local_root, output_root)
 

@@ -19,6 +19,7 @@ import json
 import sqlite3
 import struct
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import pbkdf2_hmac, sha256
@@ -612,7 +613,7 @@ def fetch_chatgpt_project(
 ) -> dict[str, Any]:
     """Extract a ChatGPT Project's files and conversations to a local directory."""
     import re
-    import time
+
 
     from .import_chatgpt_export_corpus import walk_mapping_tree, extract_node_text
 
@@ -734,3 +735,268 @@ def render_discovery_text(payload: dict[str, Any]) -> str:
         f"Recommended command: {payload['recommended_command']}",
     ]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Project registry (The Post Office)
+# ---------------------------------------------------------------------------
+
+EXTRACTION_STATES = (
+    "discovered",
+    "queued",
+    "extracting",
+    "extracted",
+    "partial",
+    "failed",
+    "routed",
+    "delivered",
+)
+
+
+def _project_registry_path(project_root: Path) -> Path:
+    return project_root / "state" / "chatgpt-project-registry.json"
+
+
+def load_project_registry(project_root: Path) -> dict[str, Any]:
+    path = _project_registry_path(project_root)
+    if not path.exists():
+        return {
+            "generated_at": now_iso(),
+            "account_id": "",
+            "project_count": 0,
+            "projects": {},
+        }
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {
+            "generated_at": now_iso(),
+            "account_id": "",
+            "project_count": 0,
+            "projects": {},
+        }
+
+
+def save_project_registry(project_root: Path, registry: dict[str, Any]) -> Path:
+    path = _project_registry_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    registry["generated_at"] = now_iso()
+    registry["project_count"] = len(registry.get("projects") or {})
+    path.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _blank_project_entry(
+    project_id: str, name: str, interactions: int, file_count: int
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "interactions": interactions,
+        "file_count": file_count,
+        "discovered_at": now_iso(),
+        "extraction_state": "discovered",
+        "extracted_at": None,
+        "extraction_manifest": None,
+        "route": None,
+    }
+
+
+def merge_project_discovery(
+    existing: dict[str, Any], discovered: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Merge freshly discovered projects into the existing registry.
+
+    Preserves extraction_state, extraction_manifest, and route for projects
+    that were already tracked. Updates name/interactions/file_count from
+    the latest discovery.
+    """
+    projects = dict(existing.get("projects") or {})
+    for pid, disc in discovered.items():
+        if pid in projects:
+            entry = projects[pid]
+            entry["name"] = disc.get("name", entry.get("name", ""))
+            entry["interactions"] = disc.get("interactions", entry.get("interactions", 0))
+            entry["file_count"] = disc.get("file_count", entry.get("file_count", 0))
+        else:
+            projects[pid] = _blank_project_entry(
+                pid,
+                disc.get("name", ""),
+                disc.get("interactions", 0),
+                disc.get("file_count", 0),
+            )
+    result = dict(existing)
+    result["projects"] = projects
+    result["project_count"] = len(projects)
+    result["generated_at"] = now_iso()
+    return result
+
+
+def discover_chatgpt_projects(
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> dict[str, dict[str, Any]]:
+    """Fetch all ChatGPT project metadata from the API. Returns {project_id: info}."""
+
+
+    session = build_chatgpt_session(cookie_jar)
+    # ChatGPT "gizmos" API returns projects as gizmo entries with resource_type "project"
+    projects: dict[str, dict[str, Any]] = {}
+    offset = 0
+    limit = 100
+    while True:
+        url = (
+            f"https://{CHATGPT_HOST}/backend-api/gizmos/discovery/mine?"
+            f"{urlencode({'offset': offset, 'limit': limit})}"
+        )
+        try:
+            page = fetch_json(session, url)
+        except ChatGPTLocalSessionError:
+            break
+        items = page.get("items") or page.get("list", {}).get("items") or []
+        if not items:
+            break
+        for item in items:
+            gizmo = item.get("gizmo") or item.get("resource") or item
+            gizmo_id = gizmo.get("id") or ""
+            display = gizmo.get("display") or {}
+            name = display.get("name") or gizmo.get("name") or gizmo.get("title") or ""
+            file_count = len(item.get("files") or [])
+            interaction_count = item.get("vanity_metrics", {}).get("num_conversations", 0)
+            if gizmo_id:
+                projects[gizmo_id] = {
+                    "name": name,
+                    "interactions": interaction_count,
+                    "file_count": file_count,
+                }
+        if len(items) < limit:
+            break
+        offset += limit
+        time.sleep(1)
+    return projects
+
+
+def set_project_route(
+    project_root: Path,
+    project_id: str,
+    destination: str,
+    *,
+    organ: str = "",
+    repo: str = "",
+) -> dict[str, Any]:
+    """Set the delivery destination for a project in the registry."""
+    registry = load_project_registry(project_root)
+    projects = registry.get("projects") or {}
+    if project_id not in projects:
+        raise ChatGPTLocalSessionError(
+            f"Project {project_id} not in registry. Run 'cce project discover' first."
+        )
+    entry = projects[project_id]
+    entry["route"] = {
+        "destination": destination,
+        "organ": organ,
+        "repo": repo,
+        "routed_at": now_iso(),
+    }
+    if entry["extraction_state"] == "discovered":
+        entry["extraction_state"] = "queued"
+    save_project_registry(project_root, registry)
+    return entry
+
+
+def render_project_status(registry: dict[str, Any]) -> str:
+    """Render a human-readable status table from the project registry."""
+    projects = registry.get("projects") or {}
+    if not projects:
+        return "No projects in registry. Run 'cce project discover' first."
+
+    state_counts: dict[str, int] = {}
+    for entry in projects.values():
+        state = entry.get("extraction_state", "unknown")
+        state_counts[state] = state_counts.get(state, 0) + 1
+
+    lines = [
+        f"Projects: {len(projects)}",
+        "",
+        "State breakdown:",
+    ]
+    for state in EXTRACTION_STATES:
+        count = state_counts.get(state, 0)
+        if count:
+            lines.append(f"  {state}: {count}")
+
+    lines.extend(["", "Per-project:"])
+    for _pid, entry in sorted(projects.items(), key=lambda x: x[1].get("name", "")):
+        name = entry.get("name", "")
+        state = entry.get("extraction_state", "unknown")
+        route = entry.get("route") or {}
+        dest = route.get("destination", "")
+        dest_suffix = f" -> {dest}" if dest else ""
+        lines.append(f"  {name:40s} [{state:12s}]{dest_suffix}")
+
+    return "\n".join(lines)
+
+
+def sync_chatgpt_projects(
+    project_root: Path,
+    *,
+    batch_size: int = 5,
+    cookie_jar: Path = DEFAULT_CHATGPT_COOKIE_JAR,
+) -> dict[str, Any]:
+    """Extract queued/stale projects to their routed destinations.
+
+    Returns a summary of what was extracted, skipped, and failed.
+    """
+
+
+    registry = load_project_registry(project_root)
+    projects = registry.get("projects") or {}
+
+    candidates = [
+        (pid, entry)
+        for pid, entry in projects.items()
+        if entry.get("extraction_state") in ("queued", "partial")
+        and entry.get("route")
+    ]
+
+    extracted: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    skipped = 0
+
+    for i, (pid, entry) in enumerate(candidates[:batch_size]):
+        route = entry["route"]
+        destination = Path(route["destination"])
+
+        entry["extraction_state"] = "extracting"
+        save_project_registry(project_root, registry)
+
+        try:
+            manifest = fetch_chatgpt_project(
+                pid, destination, cookie_jar=cookie_jar
+            )
+            entry["extraction_state"] = "delivered"
+            entry["extracted_at"] = now_iso()
+            entry["extraction_manifest"] = {
+                "files_extracted": manifest.get("file_count", 0),
+                "conversations_extracted": manifest.get("conversation_count", 0),
+                "output_root": str(destination),
+            }
+            extracted.append({"project_id": pid, "name": entry.get("name", ""), **manifest})
+        except Exception as exc:
+            entry["extraction_state"] = "failed"
+            failed.append({"project_id": pid, "name": entry.get("name", ""), "error": str(exc)})
+
+        save_project_registry(project_root, registry)
+        if i < len(candidates[:batch_size]) - 1:
+            time.sleep(3)
+
+    skipped = len(candidates) - min(batch_size, len(candidates))
+
+    return {
+        "generated_at": now_iso(),
+        "batch_size": batch_size,
+        "candidates_total": len(candidates),
+        "extracted_count": len(extracted),
+        "failed_count": len(failed),
+        "skipped_count": skipped,
+        "extracted": extracted,
+        "failed": failed,
+    }

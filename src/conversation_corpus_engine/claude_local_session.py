@@ -253,8 +253,77 @@ def discover_claude_local_session(local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT) 
     }
 
 
+# ---------------------------------------------------------------------------
+# Acquisition state persistence + payload caching
+# ---------------------------------------------------------------------------
+
+
+def _acquisition_state_path(output_root: Path) -> Path:
+    return output_root / "source" / "acquisition-state.json"
+
+
+def _conversation_cache_dir(output_root: Path) -> Path:
+    return output_root / "source" / "conversation-cache"
+
+
+def load_prior_acquisition(output_root: Path) -> dict[str, dict[str, Any]]:
+    state_path = _acquisition_state_path(output_root)
+    if not state_path.exists():
+        return {}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        return payload.get("conversations", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_acquisition_state(
+    output_root: Path,
+    conversations: dict[str, dict[str, Any]],
+    *,
+    report: dict[str, Any],
+) -> None:
+    state_path = _acquisition_state_path(output_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": now_iso(),
+        "conversation_count": len(conversations),
+        "conversations": conversations,
+        "last_acquisition_report": report,
+    }
+    state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def cache_conversation_payload(
+    output_root: Path, conversation_uuid: str, payload: dict[str, Any]
+) -> Path:
+    cache_dir = _conversation_cache_dir(output_root)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / f"{conversation_uuid}.json"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return path
+
+
+def load_cached_conversation(output_root: Path, conversation_uuid: str) -> dict[str, Any] | None:
+    path = _conversation_cache_dir(output_root) / f"{conversation_uuid}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Bundle fetching (delta-aware)
+# ---------------------------------------------------------------------------
+
+
 def fetch_claude_local_session_bundle(
     local_root: Path = DEFAULT_CLAUDE_LOCAL_ROOT,
+    *,
+    prior_state: dict[str, dict[str, Any]] | None = None,
+    output_root: Path | None = None,
 ) -> dict[str, Any]:
     local_root = resolve_claude_local_root(local_root)
     safe_storage_service, safe_storage_password = find_safe_storage_password()
@@ -271,20 +340,59 @@ def fetch_claude_local_session_bundle(
         session, f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations"
     )
 
+    prior = prior_state or {}
+    full_refresh = not prior
+
     detailed_conversations: list[dict[str, Any]] = []
     detail_failures: list[dict[str, Any]] = []
+    fetched_count = 0
+    reused_count = 0
+    skipped_count = 0
+
     detail_root = f"https://claude.ai/api/organizations/{active_org_uuid}/chat_conversations"
     for summary in summaries:
         conversation_uuid = summary.get("uuid")
         if not conversation_uuid:
+            skipped_count += 1
             continue
+
+        prior_entry = prior.get(conversation_uuid, {})
+        prior_updated_at = prior_entry.get("updated_at")
+        current_updated_at = summary.get("updated_at")
+
+        if (
+            not full_refresh
+            and prior_updated_at is not None
+            and current_updated_at is not None
+            and prior_updated_at == current_updated_at
+            and output_root is not None
+        ):
+            cached = load_cached_conversation(output_root, conversation_uuid)
+            if cached is not None:
+                detailed_conversations.append(cached)
+                reused_count += 1
+                continue
+
         try:
             detail = fetch_json(
                 session, f"{detail_root}/{conversation_uuid}?tree=true&rendering_mode=messages"
             )
             detailed_conversations.append(detail)
-        except Exception as exc:  # pragma: no cover - exercised live; unit tests mock this path.
+            fetched_count += 1
+            if output_root is not None:
+                cache_conversation_payload(output_root, conversation_uuid, detail)
+        except Exception as exc:
             detail_failures.append({"uuid": conversation_uuid, "error": str(exc)})
+
+    acquisition_report = {
+        "generated_at": now_iso(),
+        "total_listed": len(summaries) if isinstance(summaries, list) else 0,
+        "fetched_count": fetched_count,
+        "reused_count": reused_count,
+        "skipped_count": skipped_count,
+        "failure_count": len(detail_failures),
+        "full_refresh": full_refresh,
+    }
 
     return {
         "generated_at": now_iso(),
@@ -303,6 +411,9 @@ def fetch_claude_local_session_bundle(
         "users": [account] if account else [],
         "memories": [],
         "cookie_names": sorted(cookies.keys()),
+        "fetched_count": fetched_count,
+        "reused_count": reused_count,
+        "acquisition_report": acquisition_report,
     }
 
 
