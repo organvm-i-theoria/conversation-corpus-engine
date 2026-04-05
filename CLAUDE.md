@@ -196,7 +196,16 @@ All tests use `tmp_path` — never touch production data directories.
 ### Governance
 - Foundational theory layer. No upstream dependencies.
 
-*Last synced: 2026-03-26T19:39:27Z*
+*Last synced: 2026-04-04T23:09:22Z*
+
+## Active Handoff Protocol
+
+If `.conductor/active-handoff.md` exists, **READ IT FIRST** before doing any work.
+It contains constraints, locked files, conventions, and completed work from the
+originating agent. You MUST honor all constraints listed there.
+
+If the handoff says "CROSS-VERIFICATION REQUIRED", your self-assessment will
+NOT be trusted. A different agent will verify your output against these constraints.
 
 ## Session Review Protocol
 
@@ -212,10 +221,22 @@ Transcripts are on-demand (never committed):
 - `organvm session prompts <id>` — human prompts only
 
 
+## System Library
+
+Plans: 269 indexed | Chains: 5 available | SOPs: 99 active
+Discover: `organvm plans search <query>` | `organvm chains list` | `organvm sop lifecycle`
+Library: `meta-organvm/praxis-perpetua/library/`
+
+
 ## Active Directives
 
 | Scope | Phase | Name | Description |
 |-------|-------|------|-------------|
+| system | any | atomic-clock | The Atomic Clock |
+| system | any | execution-sequence | Execution Sequence |
+| system | any | multi-agent-dispatch | Multi-Agent Dispatch |
+| system | any | session-handoff-avalanche | Session Handoff Avalanche |
+| system | any | system-loops | System Loops |
 | system | any | prompting-standards | Prompting Standards |
 | system | any | research-standards-bibliography | APPENDIX: Research Standards Bibliography |
 | system | any | phase-closing-and-forward-plan | METADOC: Phase-Closing Commemoration & Forward Attack Plan |
@@ -273,11 +294,35 @@ Linked skills: cicd-resilience-and-recovery, continuous-learning-agent, evaluati
 **Prompting (Anthropic)**: context 200K tokens, format: XML tags, thinking: extended thinking (budget_tokens)
 
 
+## Live System Variables (Ontologia)
+
+| Variable | Value | Scope | Updated |
+|----------|-------|-------|---------|
+| `active_repos` | 72 | global | 2026-04-04 |
+| `archived_repos` | 54 | global | 2026-04-04 |
+| `ci_workflows` | 106 | global | 2026-04-04 |
+| `code_files` | 0 | global | 2026-04-04 |
+| `dependency_edges` | 60 | global | 2026-04-04 |
+| `operational_organs` | 9 | global | 2026-04-04 |
+| `published_essays` | 29 | global | 2026-04-04 |
+| `repos_with_tests` | 0 | global | 2026-04-04 |
+| `sprints_completed` | 33 | global | 2026-04-04 |
+| `test_files` | 0 | global | 2026-04-04 |
+| `total_organs` | 9 | global | 2026-04-04 |
+| `total_repos` | 128 | global | 2026-04-04 |
+| `total_words_formatted` | 0 | global | 2026-04-04 |
+| `total_words_numeric` | 0 | global | 2026-04-04 |
+| `total_words_short` | 0K+ | global | 2026-04-04 |
+
+Metrics: 9 registered | Observations: 22736 recorded
+Resolve: `organvm ontologia status` | Refresh: `organvm refresh`
+
+
 ## System Density (auto-generated)
 
-AMMOI: 56% | Edges: 41 | Tensions: 0 | Clusters: 0 | Adv: 8 | Events(24h): 24029
-Structure: 8 organs / 127 repos / 1654 components (depth 17) | Inference: 0% | Organs: META-ORGANVM:64%, ORGAN-I:55%, ORGAN-II:47%, ORGAN-III:55% +4 more
-Last pulse: 2026-03-26T19:39:26 | Δ24h: +3.6% | Δ7d: n/a
+AMMOI: 56% | Edges: 41 | Tensions: 33 | Clusters: 5 | Adv: 13 | Events(24h): 28198
+Structure: 8 organs / 128 repos / 1654 components (depth 17) | Inference: 98% | Organs: META-ORGANVM:64%, ORGAN-I:55%, ORGAN-II:47%, ORGAN-III:55% +4 more
+Last pulse: 2026-04-04T23:09:10 | Δ24h: -0.0% | Δ7d: n/a
 
 
 ## Dialect Identity (Trivium)
@@ -287,5 +332,25 @@ Last pulse: 2026-03-26T19:39:26 | Δ24h: +3.6% | Δ7d: n/a
 Strongest translations: III (formal), IV (formal), META (formal)
 
 Scan: `organvm trivium scan I <OTHER>` | Matrix: `organvm trivium matrix` | Synthesize: `organvm trivium synthesize`
+
+
+## Logos Documentation Layer
+
+**Status:** MISSING | **Symmetry:** 0.5 (GHOST)
+
+Nature demands a documentation counterpart. This formation maintains its narrative record in `docs/logos/`.
+
+### The Tetradic Counterpart
+- **[Telos (Idealized Form)](../docs/logos/telos.md)** — The dream and theoretical grounding.
+- **[Pragma (Concrete State)](../docs/logos/pragma.md)** — The honest account of what exists.
+- **[Praxis (Remediation Plan)](../docs/logos/praxis.md)** — The attack vectors for evolution.
+- **[Receptio (Reception)](../docs/logos/receptio.md)** — The account of the constructed polis.
+
+### Alchemical I/O
+- **[Source & Transmutation](../docs/logos/alchemical-io.md)** — Narrative of inputs, process, and returns.
+
+
+
+*Compliance: Implementation exists without record.*
 
 <!-- ORGANVM:AUTO:END -->
