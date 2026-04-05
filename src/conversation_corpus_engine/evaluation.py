@@ -7,7 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .answering import build_answer, load_json, search_documents_v4, write_json, write_markdown
+from .answering import (
+    build_answer,
+    build_documents,
+    load_json,
+    search_documents_v4,
+    write_json,
+    write_markdown,
+)
 
 DEFAULT_ROOT = Path.cwd()
 DETECTOR_KEYS = (
@@ -355,7 +362,9 @@ def average_metric(values: list[float | None]) -> float | None:
     return round(sum(usable) / len(usable), 4)
 
 
-def evaluate_answer_fixtures(root: Path, answer_payload: dict[str, Any]) -> dict[str, Any]:
+def evaluate_answer_fixtures(
+    root: Path, answer_payload: dict[str, Any], *, corpus: dict[str, Any] | None = None
+) -> dict[str, Any]:
     fixtures = answer_payload.get("fixtures", [])
     results: list[dict[str, Any]] = []
     state_matches = 0
@@ -369,7 +378,7 @@ def evaluate_answer_fixtures(root: Path, answer_payload: dict[str, Any]) -> dict
         query = fixture.get("query") or ""
         mode = fixture.get("mode")
         retrieval = search_documents_v4(
-            root, query, limit=max(8, fixture.get("limit", 8)), mode=mode
+            root, query, limit=max(8, fixture.get("limit", 8)), mode=mode, corpus=corpus
         )
         answer = build_answer(query, retrieval, mode=mode)
         required = set(fixture.get("required_citations", []))
@@ -441,6 +450,9 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
 
     canonical_decisions = load_json(root / "state" / "canonical-decisions.json", default={}) or {}
     canonical_families = load_json(root / "corpus" / "canonical-families.json", default=[]) or []
+
+    # Pre-build the corpus document index once — avoids rebuilding from disk per fixture.
+    corpus = build_documents(root)
 
     def pair_set(key: str) -> set[tuple[str, str]]:
         if "entity_alias" in key:
@@ -524,6 +536,7 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
             fixture.get("query") or "",
             limit=max(8, fixture.get("limit", 8)),
             mode=fixture.get("mode"),
+            corpus=corpus,
         )
         family_ids = [
             item.get("family_id")
@@ -585,7 +598,7 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
         "fixtures": retrieval_results,
     }
 
-    answer_metrics = evaluate_answer_fixtures(root, answer_payload)
+    answer_metrics = evaluate_answer_fixtures(root, answer_payload, corpus=corpus)
 
     scorecard = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

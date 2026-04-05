@@ -726,9 +726,15 @@ def merge_rankings(rankings: list[list[dict[str, Any]]], *, limit: int) -> list[
 
 
 def search_documents_v4(
-    root: Path, query: str, *, limit: int = 8, mode: str | None = None
+    root: Path,
+    query: str,
+    *,
+    limit: int = 8,
+    mode: str | None = None,
+    corpus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    corpus = build_documents(root)
+    if corpus is None:
+        corpus = build_documents(root)
     raw_query_tokens = tokenize(query)
     query_tokens = expand_query_tokens(query, corpus)
     matched_family_ids = matched_family_ids_for_query(query, corpus)
