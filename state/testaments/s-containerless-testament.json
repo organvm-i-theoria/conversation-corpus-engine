@@ -1,0 +1,57 @@
+{
+  "$schema": "testament-event-v1",
+  "session_id": "S-CONTAINERLESS",
+  "session_date": "2026-04-05",
+  "repo": "conversation-corpus-engine",
+  "organ": "ORGAN-I",
+  "summary": "Fix O(n²) evaluation bug: build_documents() called 1,762 times without caching, causing 8h+ runaway at 97.6% CPU. Cached corpus once, threaded through fixture loops. Runtime 8h+ → 42min. Added per-provider timeout to refresh script. Also fixed system-wide: ExecTimeout on 13 LaunchAgent plists, Spotlight exclusions for ~/Workspace.",
+  "commits": {
+    "first": "8d7c5ba",
+    "last": "512db28",
+    "count": 2,
+    "note": "Also 3 commits in domus-semper-palingenesis (fa9e42e, 87b10cb, 048b6d9) and 1 in organvm-corpvs-testamentvm (4c8405b)"
+  },
+  "test_state": {
+    "before": 277,
+    "after": 277
+  },
+  "modules_added": [],
+  "modules_modified": [
+    "answering.py",
+    "evaluation.py"
+  ],
+  "capabilities_shipped": [
+    "Corpus caching in evaluation loop (search_documents_v4 corpus= parameter)",
+    "Per-provider timeout in refresh_local_sessions.sh (2700s)"
+  ],
+  "cross_repo_artifacts": [
+    {
+      "repo": "domus-semper-palingenesis",
+      "changes": [
+        "ExecTimeout: 3600 on com.4jp.cce-refresh.plist",
+        "ExecTimeout on 12 additional LaunchAgent plists",
+        "run_once_after_spotlight-exclusions.sh.tmpl (death-test survival)",
+        "2 memory files (feedback_launchagent_exec_timeout, feedback_spotlight_workspace_exclusion)"
+      ]
+    },
+    {
+      "repo": "organvm-corpvs-testamentvm",
+      "changes": [
+        "6 IRF items (CCE-040/041/042, SYS-081/082/083)"
+      ]
+    }
+  ],
+  "irf_completed": ["IRF-CCE-040", "IRF-SYS-081", "IRF-SYS-082", "IRF-SYS-083"],
+  "irf_opened": ["IRF-CCE-041", "IRF-CCE-042"],
+  "github_issues": ["4444J99/domus-semper-palingenesis#25"],
+  "performance_impact": {
+    "before": "8+ hours (never completed), 97.6% CPU",
+    "after": "42min 40sec, 99% CPU (completes within timeout)"
+  },
+  "system_operations": [
+    "Killed PID 83577 (runaway CCE evaluation)",
+    "Spotlight index rebuilt (mdutil -E /)",
+    "Spotlight exclusions set in VolumeConfiguration.plist",
+    ".metadata_never_index added to CCE state/ and reports/"
+  ]
+}
