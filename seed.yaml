@@ -20,6 +20,17 @@ functional_class: ENGINE
 functional_class_secondary: INFRASTRUCTURE
 formation_type: GENERATOR
 
+implements:
+  - concept: formation_protocol
+    zettel_source: "post-flood/archive_original/.zettel-index.yaml#formation_protocol"
+    aspect: "GENERATOR formation — produces ANNOTATED_CORPUS, ARCHIVE_PACKET, VALIDATION_RECORD signals"
+  - concept: autopoiesis
+    zettel_source: "post-flood/archive_original/.zettel-index.yaml#autopoiesis"
+    aspect: "Self-maintaining corpus — federation imports, evaluates, and governs its own completeness"
+  - concept: AMMOI
+    zettel_source: "post-flood/archive_original/.zettel-index.yaml#AMMOI"
+    aspect: "Hierarchical indexing of conversation knowledge across providers and organs"
+
 signal_inputs:
   - ANNOTATED_CORPUS
   - EXECUTION_TRACE
