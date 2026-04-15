@@ -191,12 +191,12 @@ All tests use `tmp_path` — never touch production data directories.
 - **Consumes** ← `META-ORGANVM`: governance-rules
 
 ### Siblings in Theory
-`recursive-engine--generative-entity`, `organon-noumenon--ontogenetic-morphe`, `auto-revision-epistemic-engine`, `narratological-algorithmic-lenses`, `call-function--ontological`, `sema-metra--alchemica-mundi`, `cognitive-archaelogy-tribunal`, `a-recursive-root`, `radix-recursiva-solve-coagula-redi`, `.github`, `nexus--babel-alexandria`, `4-ivi374-F0Rivi4`, `cog-init-1-0-`, `linguistic-atomization-framework`, `my-knowledge-base` ... and 6 more
+`recursive-engine--generative-entity`, `organon-noumenon--ontogenetic-morphe`, `auto-revision-epistemic-engine`, `narratological-algorithmic-lenses`, `call-function--ontological`, `sema-metra--alchemica-mundi`, `cognitive-archaelogy-tribunal`, `a-recursive-root`, `radix-recursiva-solve-coagula-redi`, `.github`, `nexus--babel-alexandria`, `4-ivi374-F0Rivi4`, `cog-init-1-0-`, `linguistic-atomization-framework`, `my-knowledge-base` ... and 10 more
 
 ### Governance
 - Foundational theory layer. No upstream dependencies.
 
-*Last synced: 2026-04-04T23:09:22Z*
+*Last synced: 2026-04-14T21:31:48Z*
 
 ## Active Handoff Protocol
 
@@ -223,7 +223,7 @@ Transcripts are on-demand (never committed):
 
 ## System Library
 
-Plans: 269 indexed | Chains: 5 available | SOPs: 99 active
+Plans: 269 indexed | Chains: 5 available | SOPs: 121 active
 Discover: `organvm plans search <query>` | `organvm chains list` | `organvm sop lifecycle`
 Library: `meta-organvm/praxis-perpetua/library/`
 
@@ -298,31 +298,31 @@ Linked skills: cicd-resilience-and-recovery, continuous-learning-agent, evaluati
 
 | Variable | Value | Scope | Updated |
 |----------|-------|-------|---------|
-| `active_repos` | 72 | global | 2026-04-04 |
-| `archived_repos` | 54 | global | 2026-04-04 |
-| `ci_workflows` | 106 | global | 2026-04-04 |
-| `code_files` | 0 | global | 2026-04-04 |
-| `dependency_edges` | 60 | global | 2026-04-04 |
-| `operational_organs` | 9 | global | 2026-04-04 |
-| `published_essays` | 29 | global | 2026-04-04 |
-| `repos_with_tests` | 0 | global | 2026-04-04 |
-| `sprints_completed` | 33 | global | 2026-04-04 |
-| `test_files` | 0 | global | 2026-04-04 |
-| `total_organs` | 9 | global | 2026-04-04 |
-| `total_repos` | 128 | global | 2026-04-04 |
-| `total_words_formatted` | 0 | global | 2026-04-04 |
-| `total_words_numeric` | 0 | global | 2026-04-04 |
-| `total_words_short` | 0K+ | global | 2026-04-04 |
+| `active_repos` | 89 | global | 2026-04-14 |
+| `archived_repos` | 54 | global | 2026-04-14 |
+| `ci_workflows` | 107 | global | 2026-04-14 |
+| `code_files` | 0 | global | 2026-04-14 |
+| `dependency_edges` | 60 | global | 2026-04-14 |
+| `operational_organs` | 10 | global | 2026-04-14 |
+| `published_essays` | 29 | global | 2026-04-14 |
+| `repos_with_tests` | 0 | global | 2026-04-14 |
+| `sprints_completed` | 33 | global | 2026-04-14 |
+| `test_files` | 0 | global | 2026-04-14 |
+| `total_organs` | 10 | global | 2026-04-14 |
+| `total_repos` | 145 | global | 2026-04-14 |
+| `total_words_formatted` | 0 | global | 2026-04-14 |
+| `total_words_numeric` | 0 | global | 2026-04-14 |
+| `total_words_short` | 0K+ | global | 2026-04-14 |
 
-Metrics: 9 registered | Observations: 22736 recorded
+Metrics: 9 registered | Observations: 32128 recorded
 Resolve: `organvm ontologia status` | Refresh: `organvm refresh`
 
 
 ## System Density (auto-generated)
 
-AMMOI: 56% | Edges: 41 | Tensions: 33 | Clusters: 5 | Adv: 13 | Events(24h): 28198
-Structure: 8 organs / 128 repos / 1654 components (depth 17) | Inference: 98% | Organs: META-ORGANVM:64%, ORGAN-I:55%, ORGAN-II:47%, ORGAN-III:55% +4 more
-Last pulse: 2026-04-04T23:09:10 | Δ24h: -0.0% | Δ7d: n/a
+AMMOI: 58% | Edges: 42 | Tensions: 33 | Clusters: 5 | Adv: 23 | Events(24h): 32336
+Structure: 8 organs / 145 repos / 1654 components (depth 17) | Inference: 98% | Organs: META-ORGANVM:65%, ORGAN-I:53%, ORGAN-II:48%, ORGAN-III:54% +5 more
+Last pulse: 2026-04-14T21:31:36 | Δ24h: -1.0% | Δ7d: n/a
 
 
 ## Dialect Identity (Trivium)
