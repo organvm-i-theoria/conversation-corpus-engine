@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -502,31 +503,66 @@ def build_thread_audit(
     }
 
 
+def _trigram_fingerprint(text: str) -> frozenset[str]:
+    """Build character trigram set from tokenized text for fast similarity screening."""
+    tokens = [t for t in tokenize(text.lower()) if t not in STOP_WORDS and len(t) > 2]
+    trigrams: set[str] = set()
+    for token in tokens:
+        for k in range(len(token) - 2):
+            trigrams.add(token[k : k + 3])
+    return frozenset(trigrams)
+
+
 def detect_near_duplicates(
     threads: list[dict[str, Any]],
     first_prompts: dict[str, str],
     *,
     threshold: float = 0.92,
+    throttle: float = 0.0,
 ) -> list[dict[str, Any]]:
+    """Detect near-duplicate threads by comparing first user prompts.
+
+    Uses a trigram Jaccard pre-filter to avoid expensive SequenceMatcher calls
+    on clearly dissimilar pairs. The Jaccard threshold (0.35) is conservative —
+    any pair with SequenceMatcher ratio >= 0.92 will pass the pre-filter.
+    """
     candidates: list[dict[str, Any]] = []
+    uid_to_index = {t["thread_uid"]: idx for idx, t in enumerate(threads)}
     uids = [thread["thread_uid"] for thread in threads]
-    for left in range(len(uids)):
-        prompt_left = first_prompts.get(uids[left], "")
-        if len(prompt_left) < 20:
-            continue
-        for right in range(left + 1, len(uids)):
-            prompt_right = first_prompts.get(uids[right], "")
-            if len(prompt_right) < 20:
+
+    # Pre-compute fingerprints for eligible prompts
+    fingerprints: dict[str, frozenset[str]] = {}
+    for uid in uids:
+        prompt = first_prompts.get(uid, "")
+        if len(prompt) >= 20:
+            fingerprints[uid] = _trigram_fingerprint(prompt[:500])
+
+    eligible = [uid for uid in uids if uid in fingerprints]
+
+    for i in range(len(eligible)):
+        fp_a = fingerprints[eligible[i]]
+        prompt_a = first_prompts[eligible[i]][:500]
+        if throttle > 0 and i % 50 == 0:
+            time.sleep(throttle)
+        for j in range(i + 1, len(eligible)):
+            fp_b = fingerprints[eligible[j]]
+            # Fast Jaccard pre-filter (frozenset ops, microseconds per pair)
+            union_size = len(fp_a | fp_b)
+            if union_size == 0:
                 continue
-            ratio = SequenceMatcher(None, prompt_left[:500], prompt_right[:500]).ratio()
+            if len(fp_a & fp_b) / union_size < 0.35:
+                continue
+            # Expensive comparison only for plausible candidates
+            prompt_b = first_prompts[eligible[j]][:500]
+            ratio = SequenceMatcher(None, prompt_a, prompt_b).ratio()
             if ratio >= threshold:
                 candidates.append(
                     {
-                        "thread_uids": [uids[left], uids[right]],
+                        "thread_uids": [eligible[i], eligible[j]],
                         "similarity": round(ratio, 4),
                         "titles": [
-                            threads[left].get("title_normalized", ""),
-                            threads[right].get("title_normalized", ""),
+                            threads[uid_to_index[eligible[i]]].get("title_normalized", ""),
+                            threads[uid_to_index[eligible[j]]].get("title_normalized", ""),
                         ],
                     }
                 )
@@ -552,6 +588,7 @@ def import_claude_export_corpus(
     *,
     corpus_id: str | None = None,
     name: str | None = None,
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     bundle_root = resolve_bundle_root(input_path)
     conversations = load_json_file(bundle_root / "conversations.json", default=[])
@@ -755,7 +792,7 @@ def import_claude_export_corpus(
         for entity in entities
         if entity.get("aliases")
     ]
-    near_duplicates = detect_near_duplicates(threads, first_prompts)
+    near_duplicates = detect_near_duplicates(threads, first_prompts, throttle=throttle)
 
     corpus_dir = output_root / "corpus"
     source_snapshot = build_source_snapshot(bundle_root, "claude-export", "bundle-json")

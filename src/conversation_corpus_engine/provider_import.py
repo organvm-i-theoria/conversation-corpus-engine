@@ -113,6 +113,7 @@ def import_provider_corpus(
     register: bool = False,
     build: bool = False,
     bootstrap_eval: bool = True,
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     config = get_provider_config(provider)
     resolved_source_path, resolution = resolve_provider_import_source(
@@ -143,6 +144,7 @@ def import_provider_corpus(
             resolved_output_root,
             corpus_id=resolved_corpus_id,
             name=resolved_name,
+            throttle=throttle,
         )
     elif provider == "chatgpt" and mode == "local-session":
         resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
@@ -152,6 +154,7 @@ def import_provider_corpus(
             resolved_output_root,
             corpus_id=resolved_corpus_id,
             name=resolved_name,
+            throttle=throttle,
         )
     elif provider == "chatgpt":
         resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
@@ -161,6 +164,7 @@ def import_provider_corpus(
             resolved_output_root,
             corpus_id=resolved_corpus_id,
             name=resolved_name,
+            throttle=throttle,
         )
     elif provider == "claude":
         resolved_corpus_id = resolved_corpus_id or config["fallback_corpus_id"]
@@ -170,6 +174,7 @@ def import_provider_corpus(
             resolved_output_root,
             corpus_id=resolved_corpus_id,
             name=resolved_name,
+            throttle=throttle,
         )
     else:
         resolved_corpus_id = resolved_corpus_id or config["default_corpus_id"]
@@ -180,6 +185,7 @@ def import_provider_corpus(
             provider_slug=provider,
             corpus_id=resolved_corpus_id,
             name=resolved_name,
+            throttle=throttle,
         )
 
     bootstrap_result = (

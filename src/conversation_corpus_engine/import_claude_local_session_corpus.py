@@ -139,6 +139,7 @@ def import_claude_local_session_corpus(
     *,
     corpus_id: str = DEFAULT_CORPUS_ID,
     name: str = DEFAULT_NAME,
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     local_root = local_root.resolve()
     discovery = discover_claude_local_session(local_root)
@@ -168,7 +169,7 @@ def import_claude_local_session_corpus(
         bundle_root = Path(tmpdir) / "claude-local-bundle"
         write_local_session_bundle(bundle_root, bundle)
         result = import_claude_export_corpus(
-            bundle_root, output_root, corpus_id=corpus_id, name=name
+            bundle_root, output_root, corpus_id=corpus_id, name=name, throttle=throttle
         )
         source_root = output_root / "source"
         source_root.mkdir(parents=True, exist_ok=True)

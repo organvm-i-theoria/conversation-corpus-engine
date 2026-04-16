@@ -294,6 +294,7 @@ def import_document_export_corpus(
     provider_slug: str,
     corpus_id: str | None = None,
     name: str | None = None,
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     config = get_provider_config(provider_slug)
     provider_name = config["display_name"]

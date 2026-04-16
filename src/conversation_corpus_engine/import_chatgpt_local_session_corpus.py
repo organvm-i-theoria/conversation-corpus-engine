@@ -124,6 +124,7 @@ def import_chatgpt_local_session_corpus(
     name: str = DEFAULT_NAME,
     limit: int = 100,
     offset: int = 0,
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     cookie_jar = cookie_jar.resolve()
     output_root = output_root.resolve()
@@ -144,7 +145,7 @@ def import_chatgpt_local_session_corpus(
         bundle_root = Path(tmpdir) / "chatgpt-local-bundle"
         write_local_session_bundle(bundle_root, bundle)
         result = import_chatgpt_export_corpus(
-            bundle_root, output_root, corpus_id=corpus_id, name=name
+            bundle_root, output_root, corpus_id=corpus_id, name=name, throttle=throttle
         )
         source_root = output_root / "source"
         source_root.mkdir(parents=True, exist_ok=True)

@@ -257,6 +257,13 @@ def build_parser() -> argparse.ArgumentParser:
     provider_refresh.add_argument("--approve", action="store_true")
     provider_refresh.add_argument("--promote", action="store_true")
     provider_refresh.add_argument("--note", default="")
+    provider_refresh.add_argument(
+        "--throttle",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="Voluntary CPU yield interval in hot loops (0=disabled, 0.001=recommended for background)",
+    )
     provider_refresh.add_argument("--json", action="store_true")
 
     project = subparsers.add_parser("project", help="ChatGPT project extraction and lifecycle")
@@ -808,6 +815,7 @@ def main() -> None:
             approve=args.approve or args.promote,
             promote=args.promote,
             note=args.note,
+            throttle=args.throttle,
         )
         print(json.dumps(payload, indent=2))
         return

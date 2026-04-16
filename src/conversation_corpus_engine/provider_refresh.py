@@ -113,6 +113,7 @@ def refresh_provider_corpus(
     approve: bool = False,
     promote: bool = False,
     note: str = "",
+    throttle: float = 0.0,
 ) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
     live_entry = resolve_live_entry(
@@ -148,6 +149,7 @@ def refresh_provider_corpus(
         register=False,
         build=False,
         bootstrap_eval=bootstrap_eval,
+        throttle=throttle,
     )
 
     scorecard = None
