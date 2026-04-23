@@ -20,7 +20,7 @@ from .answering import (
     write_markdown,
 )
 from .federated_canon import build_federated_canon
-from .paths import default_project_root
+from .paths import default_project_root, resolve_workspace_path
 from .source_lifecycle import compute_source_freshness
 
 DEFAULT_PROJECT_ROOT = default_project_root()
@@ -56,6 +56,7 @@ def answers_dir(root: Path) -> Path:
 
 
 def validate_corpus_root(corpus_root: Path) -> dict[str, Any]:
+    corpus_root = resolve_workspace_path(corpus_root)
     missing = [
         relative for relative in REQUIRED_CONTRACT_FILES if not (corpus_root / relative).exists()
     ]
@@ -151,6 +152,7 @@ def upsert_corpus(
     status: str = "active",
     make_default: bool = False,
 ) -> dict[str, Any]:
+    corpus_root = resolve_workspace_path(corpus_root)
     validation = validate_corpus_root(corpus_root)
     if not validation["valid"]:
         missing = ", ".join(validation["missing_files"])
@@ -200,7 +202,7 @@ def remove_corpus(project_root: Path, corpus_id: str) -> dict[str, Any]:
 
 
 def load_corpus_surface(entry: dict[str, Any]) -> dict[str, Any]:
-    root = Path(entry["root"])
+    root = resolve_workspace_path(Path(entry["root"]))
     threads = load_json(root / "corpus" / "threads-index.json", default=[]) or []
     doctrine_briefs = load_json(root / "corpus" / "doctrine-briefs.json", default=[]) or []
     family_dossiers = load_json(root / "corpus" / "family-dossiers.json", default=[]) or []

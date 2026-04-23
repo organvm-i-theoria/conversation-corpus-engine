@@ -204,6 +204,23 @@ def test_collect_source_files_for_chatgpt_local_session_tracks_cookie_jar(
     assert files == [cookie_jar.resolve()]
 
 
+def test_build_source_signature_resolves_legacy_sovereign_systems_workspace_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace_root = tmp_path / "Workspace"
+    actual_root = workspace_root / "organvm" / "sovereign-systems--elevate-align"
+    stale_root = workspace_root / "organvm-iii-ergon" / "sovereign-systems--elevate-align"
+    (actual_root / "notes.md").parent.mkdir(parents=True, exist_ok=True)
+    (actual_root / "notes.md").write_text("# Sovereign Systems\n", encoding="utf-8")
+    monkeypatch.setenv("CCE_WORKSPACE_ROOT", str(workspace_root))
+
+    signature = build_source_signature(stale_root, "markdown-document", "recursive")
+
+    assert signature["exists"] is True
+    assert signature["root_base"] == str(actual_root.resolve())
+    assert [item["relative_path"] for item in signature["files"]] == ["notes.md"]
+
+
 def test_compute_source_freshness_for_chatgpt_local_session_reports_states(
     tmp_path: Path,
 ) -> None:

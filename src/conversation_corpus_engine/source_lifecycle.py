@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .answering import load_json
+from .paths import resolve_workspace_path
 from .provider_exports import collect_supported_export_files
 
 SUPPORTED_SOURCE_ADAPTERS = {
@@ -64,7 +65,7 @@ def transcript_attachment_roots(source_input: Path) -> list[Path]:
 def collect_source_files(
     source_input: Path, adapter_type: str, collection_scope: str | None
 ) -> list[Path]:
-    source_input = source_input.resolve()
+    source_input = resolve_workspace_path(source_input)
     if not source_input.exists():
         return []
 
@@ -135,7 +136,7 @@ def collect_source_files(
 def build_source_signature(
     source_input: Path, adapter_type: str, collection_scope: str | None
 ) -> dict[str, Any]:
-    source_input = source_input.resolve()
+    source_input = resolve_workspace_path(source_input)
     if adapter_type not in SUPPORTED_SOURCE_ADAPTERS:
         return {
             "captured_at": now_iso(),
@@ -256,7 +257,7 @@ def compute_source_freshness(corpus_root: Path) -> dict[str, Any]:
             "note": "Corpus is not importer-managed or does not expose a refreshable source input.",
         }
 
-    source_input = Path(source_input_value).resolve()
+    source_input = resolve_workspace_path(Path(source_input_value))
     stored_snapshot = load_source_snapshot(corpus_root)
     current_signature = build_source_signature(source_input, adapter_type, collection_scope)
     if not current_signature.get("exists"):

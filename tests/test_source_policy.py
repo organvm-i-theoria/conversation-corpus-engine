@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -53,6 +54,31 @@ class SourcePolicyTests(unittest.TestCase):
             self.assertEqual(targets[0]["root"], str(primary_root.resolve()))
             self.assertEqual(targets[1]["role"], "fallback")
             self.assertEqual(targets[1]["root"], str(fallback_root.resolve()))
+
+    def test_load_source_policy_resolves_legacy_commerce_meta_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_root = Path(tmpdir) / "Workspace"
+            project_root = Path(tmpdir) / "project"
+            actual_root = workspace_root / "organvm" / "commerce--meta"
+            stale_root = workspace_root / "organvm-iii-ergon" / "commerce--meta"
+            actual_root.mkdir(parents=True, exist_ok=True)
+            source_policy_path = project_root / "state" / "source-policies" / "gemini.json"
+            source_policy_path.parent.mkdir(parents=True, exist_ok=True)
+            source_policy_path.write_text(
+                json.dumps(
+                    {
+                        "provider": "gemini",
+                        "primary_root": str(stale_root),
+                        "primary_corpus_id": "gemini-history-memory",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {"CCE_WORKSPACE_ROOT": str(workspace_root)}):
+                policy = load_source_policy(project_root, "gemini")
+
+            self.assertEqual(policy["primary_root"], str(actual_root.resolve()))
 
 
 if __name__ == "__main__":

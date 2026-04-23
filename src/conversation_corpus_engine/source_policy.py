@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .answering import load_json, write_json, write_markdown
+from .paths import resolve_workspace_path
 
 
 def now_iso() -> str:
@@ -27,8 +28,17 @@ def source_policy_report_path(project_root: Path, provider: str) -> Path:
     return project_root.resolve() / "reports" / f"{provider}-source-policy-latest.md"
 
 
+def normalize_source_policy(payload: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    for field in ("primary_root", "fallback_root"):
+        value = normalized.get(field)
+        if value:
+            normalized[field] = str(resolve_workspace_path(value))
+    return normalized
+
+
 def load_source_policy(project_root: Path, provider: str) -> dict[str, Any]:
-    return load_json(source_policy_path(project_root, provider), default={}) or {}
+    return normalize_source_policy(load_json(source_policy_path(project_root, provider), default={}))
 
 
 def append_source_policy_history(project_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
@@ -67,7 +77,7 @@ def write_source_policy_payload(
     *,
     append_history: bool = False,
 ) -> dict[str, Any]:
-    normalized = dict(payload)
+    normalized = normalize_source_policy(payload)
     normalized["provider"] = provider
     write_json(source_policy_path(project_root, provider), normalized)
     write_markdown(
@@ -101,13 +111,15 @@ def set_source_policy(
     decision: str = "manual",
     note: str = "",
 ) -> dict[str, Any]:
+    primary_root = resolve_workspace_path(primary_root)
+    fallback_root = resolve_workspace_path(fallback_root) if fallback_root is not None else None
     payload = {
         "provider": provider,
         "generated_at": now_iso(),
         "decision": decision,
-        "primary_root": str(primary_root.resolve()),
+        "primary_root": str(primary_root),
         "primary_corpus_id": primary_corpus_id,
-        "fallback_root": str(fallback_root.resolve()) if fallback_root is not None else None,
+        "fallback_root": str(fallback_root) if fallback_root is not None else None,
         "fallback_corpus_id": fallback_corpus_id,
         "note": note,
     }
