@@ -305,26 +305,31 @@ def extract_node_text(node: dict[str, Any]) -> str:
 
 
 def walk_mapping_tree(mapping: dict[str, Any]) -> list[dict[str, Any]]:
-    """Walk the ChatGPT mapping tree in order, returning non-system message nodes."""
-    # Find root nodes (nodes with no parent or parent=null)
+    """Walk the ChatGPT mapping tree in order, returning non-system message nodes.
+
+    Iterative DFS — long conversations create deep linear chains that overflow
+    Python's default recursion limit. ChatGPT exports with multi-thousand-message
+    threads were crashing with RecursionError before this change.
+    """
     roots = [node_id for node_id, node in mapping.items() if not node.get("parent")]
 
     ordered: list[dict[str, Any]] = []
 
-    def walk(node_id: str) -> None:
-        node = mapping.get(node_id)
-        if node is None:
-            return
-        message = node.get("message")
-        if message is not None:
-            role = (message.get("author") or {}).get("role", "")
-            if role != "system":
-                ordered.append(node)
-        for child_id in node.get("children") or []:
-            walk(child_id)
-
     for root_id in roots:
-        walk(root_id)
+        stack = [root_id]
+        while stack:
+            node_id = stack.pop()
+            node = mapping.get(node_id)
+            if node is None:
+                continue
+            message = node.get("message")
+            if message is not None:
+                role = (message.get("author") or {}).get("role", "")
+                if role != "system":
+                    ordered.append(node)
+            children = node.get("children") or []
+            for child_id in reversed(children):
+                stack.append(child_id)
 
     # Sort by create_time if available to ensure proper order
     def node_create_time(node: dict[str, Any]) -> float:
