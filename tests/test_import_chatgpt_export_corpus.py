@@ -272,5 +272,175 @@ class DetectNearDuplicatesTests(unittest.TestCase):
         self.assertEqual(len(result), 0)
 
 
+from conversation_corpus_engine.import_chatgpt_export_corpus import (  # noqa: E402
+    discover_bundle_roots,
+    resolve_bundle_root,
+)
+
+
+class DiscoverBundleRootsTests(unittest.TestCase):
+    def _write_minimal_bundle(self, root: Path, *, conversations: list[dict] | None = None) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "conversations.json").write_text(json.dumps(conversations or []), encoding="utf-8")
+        (root / "user.json").write_text("{}", encoding="utf-8")
+
+    def test_single_bundle_directory_returns_one_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            self._write_minimal_bundle(bundle)
+            result = discover_bundle_roots(bundle)
+            self.assertEqual(result, [bundle.resolve()])
+
+    def test_file_input_returns_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            self._write_minimal_bundle(bundle)
+            result = discover_bundle_roots(bundle / "conversations.json")
+            self.assertEqual(result, [bundle.resolve()])
+
+    def test_multi_part_returns_sorted_subdirs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "split-export"
+            for name in ("part-3", "part-1", "part-2"):
+                self._write_minimal_bundle(parent / name)
+            result = discover_bundle_roots(parent)
+            self.assertEqual(
+                [p.name for p in result],
+                ["part-1", "part-2", "part-3"],
+                "Multi-part discovery must return parts in sorted order",
+            )
+
+    def test_missing_files_raises_with_clear_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty = Path(tmpdir) / "nothing"
+            empty.mkdir()
+            with self.assertRaises(FileNotFoundError) as ctx:
+                discover_bundle_roots(empty)
+            self.assertIn("conversations.json", str(ctx.exception))
+            self.assertIn("multi-part", str(ctx.exception))
+
+    def test_directory_with_bundle_takes_precedence_over_subdirs(self) -> None:
+        # If a dir is itself a valid bundle AND has bundle subdirs, the dir wins.
+        # Avoids accidental multi-part interpretation of single bundles that happen
+        # to contain incidental subfolders.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "ambiguous"
+            self._write_minimal_bundle(parent)
+            self._write_minimal_bundle(parent / "stray-subdir")
+            result = discover_bundle_roots(parent)
+            self.assertEqual(result, [parent.resolve()])
+
+    def test_resolve_bundle_root_still_works_for_back_compat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            self._write_minimal_bundle(bundle)
+            self.assertEqual(resolve_bundle_root(bundle), bundle.resolve())
+
+
+class ImportMultiPartCorpusTests(unittest.TestCase):
+    def _write_bundle_with_conversations(self, root: Path, conversations: list[dict]) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "conversations.json").write_text(json.dumps(conversations), encoding="utf-8")
+        (root / "user.json").write_text(
+            json.dumps({"id": "user-test", "email": "test@example.com"}), encoding="utf-8"
+        )
+
+    @staticmethod
+    def _conv(uid: str, title: str, prompt: str) -> dict:
+        return {
+            "title": title,
+            "create_time": 1700000000,
+            "update_time": 1700000100,
+            "conversation_id": uid,
+            "mapping": {
+                "n1": {
+                    "id": "n1",
+                    "parent": None,
+                    "children": ["n2"],
+                    "message": None,
+                },
+                "n2": {
+                    "id": "n2",
+                    "parent": "n1",
+                    "children": ["n3"],
+                    "message": {
+                        "id": "n2",
+                        "author": {"role": "user"},
+                        "create_time": 1700000010,
+                        "content": {"content_type": "text", "parts": [prompt]},
+                    },
+                },
+                "n3": {
+                    "id": "n3",
+                    "parent": "n2",
+                    "children": [],
+                    "message": {
+                        "id": "n3",
+                        "author": {"role": "assistant"},
+                        "create_time": 1700000020,
+                        "content": {"content_type": "text", "parts": ["Reply: " + prompt]},
+                    },
+                },
+            },
+        }
+
+    def test_multi_part_concatenates_and_dedupes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "split-export"
+            output = Path(tmpdir) / "out"
+
+            self._write_bundle_with_conversations(
+                parent / "part-1",
+                [
+                    self._conv("conv-A", "Alpha thread", "How do I configure A?"),
+                    self._conv("conv-B", "Beta thread", "Walk me through B setup"),
+                ],
+            )
+            self._write_bundle_with_conversations(
+                parent / "part-2",
+                [
+                    # conv-B is duplicated across parts and must be skipped
+                    self._conv("conv-B", "Beta thread", "Walk me through B setup"),
+                    self._conv("conv-C", "Gamma thread", "Explain the gamma topic"),
+                ],
+            )
+
+            result = import_chatgpt_export_corpus(
+                parent, output, corpus_id="multi-part-test", name="Multi-Part Test"
+            )
+
+            self.assertEqual(result["bundle_part_count"], 2)
+            self.assertEqual(result["bundle_part_names"], ["part-1", "part-2"])
+            self.assertEqual(result["duplicate_conversations_skipped"], 1)
+            self.assertEqual(result["thread_count"], 3, "Expected 3 unique threads after dedup")
+
+            # Sources copied under prefixed subdirectories
+            self.assertTrue((output / "source" / "part-1" / "conversations.json").exists())
+            self.assertTrue((output / "source" / "part-2" / "conversations.json").exists())
+
+            # README mentions multi-part
+            readme_text = (output / "README.md").read_text(encoding="utf-8")
+            self.assertIn("Bundle parts: 2", readme_text)
+            self.assertIn("part-1", readme_text)
+            self.assertIn("part-2", readme_text)
+
+    def test_single_bundle_keeps_flat_source_layout(self) -> None:
+        # Backwards compat: single-bundle imports must NOT prefix source/ with a part name.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            output = Path(tmpdir) / "out"
+            self._write_bundle_with_conversations(
+                bundle, [self._conv("conv-X", "Solo", "Just one bundle")]
+            )
+
+            result = import_chatgpt_export_corpus(bundle, output, corpus_id="single-test")
+
+            self.assertEqual(result["bundle_part_count"], 1)
+            self.assertEqual(result["duplicate_conversations_skipped"], 0)
+            # Source files at top level of source/, NOT under source/<name>/
+            self.assertTrue((output / "source" / "conversations.json").exists())
+            self.assertFalse((output / "source" / "export").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

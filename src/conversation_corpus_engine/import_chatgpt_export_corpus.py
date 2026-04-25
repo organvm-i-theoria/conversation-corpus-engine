@@ -151,6 +151,39 @@ def resolve_bundle_root(input_path: Path) -> Path:
     return bundle_root
 
 
+def discover_bundle_roots(input_path: Path) -> list[Path]:
+    """Resolve one or more ChatGPT export bundle roots from input_path.
+
+    - File input pointing to a conversations.json: returns [parent].
+    - Directory containing conversations.json + user.json: returns [dir] (single).
+    - Directory whose immediate subdirectories each contain a valid bundle:
+      returns the sorted list of subdirectories (multi-part split exports).
+
+    Single-bundle behavior matches resolve_bundle_root; multi-part is the new path.
+    """
+    input_path = input_path.resolve()
+    if input_path.is_file():
+        if input_path.name == "conversations.json":
+            return [input_path.parent]
+        raise ValueError(
+            f"Expected a ChatGPT export directory or conversations.json file, got {input_path}"
+        )
+    if all((input_path / name).exists() for name in REQUIRED_BUNDLE_FILES):
+        return [input_path]
+    parts = sorted(
+        child
+        for child in input_path.iterdir()
+        if child.is_dir() and all((child / name).exists() for name in REQUIRED_BUNDLE_FILES)
+    )
+    if parts:
+        return parts
+    missing = [name for name in REQUIRED_BUNDLE_FILES if not (input_path / name).exists()]
+    raise FileNotFoundError(
+        f"ChatGPT export bundle at {input_path} is missing required files: "
+        f"{', '.join(missing)} (no multi-part subdirectories with valid bundles found either)"
+    )
+
+
 def normalize_whitespace(text: str) -> str:
     return " ".join(text.split()).strip()
 
@@ -562,9 +595,13 @@ def detect_near_duplicates(
     return candidates
 
 
-def copy_bundle_files(bundle_root: Path, output_root: Path) -> list[str]:
+def copy_bundle_files(
+    bundle_root: Path, output_root: Path, *, prefix: str | None = None
+) -> list[str]:
     copied: list[str] = []
     source_root = output_root / "source"
+    if prefix:
+        source_root = source_root / prefix
     source_root.mkdir(parents=True, exist_ok=True)
     for path in sorted(bundle_root.rglob("*.json")):
         relative = path.relative_to(bundle_root)
@@ -583,14 +620,32 @@ def import_chatgpt_export_corpus(
     name: str | None = None,
     throttle: float = 0.0,
 ) -> dict[str, Any]:
-    bundle_root = resolve_bundle_root(input_path)
-    conversations = load_json_file(bundle_root / "conversations.json", default=[])
+    bundle_roots = discover_bundle_roots(input_path)
+    bundle_root = bundle_roots[0]  # primary — used for source_snapshot, manifest, briefs
+    is_multi_part = len(bundle_roots) > 1
+
+    conversations: list[dict[str, Any]] = []
+    seen_conversation_ids: set[str] = set()
+    duplicate_skipped_count = 0
+    for part_root in bundle_roots:
+        part_conversations = load_json_file(part_root / "conversations.json", default=[])
+        for conv in part_conversations:
+            cid = conv.get("conversation_id")
+            if cid and cid in seen_conversation_ids:
+                duplicate_skipped_count += 1
+                continue
+            if cid:
+                seen_conversation_ids.add(cid)
+            conversations.append(conv)
     user = load_json_file(bundle_root / "user.json", default={})
 
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "corpus").mkdir(parents=True, exist_ok=True)
 
-    copied_sources = copy_bundle_files(bundle_root, output_root)
+    copied_sources: list[str] = []
+    for part_root in bundle_roots:
+        part_prefix = part_root.name if is_multi_part else None
+        copied_sources.extend(copy_bundle_files(part_root, output_root, prefix=part_prefix))
 
     threads: list[dict[str, Any]] = []
     semantic_threads: list[dict[str, Any]] = []
@@ -876,7 +931,11 @@ def import_chatgpt_export_corpus(
                 "# ChatGPT History Memory Corpus",
                 "",
                 f"- Generated: {now_iso()}",
-                f"- Source input: {bundle_root}",
+                f"- Source input: {bundle_root}"
+                + (f" (+{len(bundle_roots) - 1} additional parts)" if is_multi_part else ""),
+                f"- Bundle parts: {len(bundle_roots)}"
+                + (f" ({', '.join(p.name for p in bundle_roots)})" if is_multi_part else ""),
+                f"- Duplicate conversations skipped across parts: {duplicate_skipped_count}",
                 f"- Imported conversations: {imported_conversation_count}",
                 f"- Empty conversations skipped: {empty_conversation_count}",
                 f"- Pair count: {len(pairs)}",
@@ -904,6 +963,9 @@ def import_chatgpt_export_corpus(
         "flagged_thread_count": sum(1 for a in thread_audits if a.get("quality_flags")),
         "manifest_path": str(output_root / "import-manifest.json"),
         "readme_path": str(output_root / "README.md"),
+        "bundle_part_count": len(bundle_roots),
+        "bundle_part_names": [p.name for p in bundle_roots],
+        "duplicate_conversations_skipped": duplicate_skipped_count,
     }
 
 
