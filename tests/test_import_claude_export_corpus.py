@@ -114,7 +114,9 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             output_root = root / "claude-history-memory"
-            duplicate_prompt = "Please build a deterministic federation adapter with audit visibility."
+            duplicate_prompt = (
+                "Please build a deterministic federation adapter with audit visibility."
+            )
             bundle = self._write_bundle(
                 root,
                 [
@@ -318,6 +320,152 @@ class DetectNearDuplicatesTests(unittest.TestCase):
         prompts = {"t1": "hi", "t2": "hi"}
 
         self.assertEqual(detect_near_duplicates(threads, prompts), [])
+
+
+from conversation_corpus_engine.import_claude_export_corpus import (  # noqa: E402
+    discover_bundle_roots,
+    resolve_bundle_root,
+)
+
+
+def _write_claude_bundle(root: Path, conversations: list[dict[str, object]]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "users.json").write_text(
+        json.dumps([{"uuid": "user-1", "full_name": "Test User"}]), encoding="utf-8"
+    )
+    (root / "projects.json").write_text("[]", encoding="utf-8")
+    (root / "memories.json").write_text("[]", encoding="utf-8")
+    (root / "conversations.json").write_text(json.dumps(conversations), encoding="utf-8")
+
+
+def _claude_conv(uuid: str, name: str, prompt: str) -> dict[str, object]:
+    return {
+        "uuid": uuid,
+        "name": name,
+        "summary": "",
+        "created_at": "2026-03-14T10:00:00Z",
+        "updated_at": "2026-03-14T10:05:00Z",
+        "chat_messages": [
+            {
+                "uuid": f"{uuid}-msg-1",
+                "sender": "human",
+                "created_at": "2026-03-14T10:00:00Z",
+                "updated_at": "2026-03-14T10:00:00Z",
+                "text": prompt,
+                "content": [{"type": "text", "text": prompt}],
+                "attachments": [],
+                "files": [],
+            },
+            {
+                "uuid": f"{uuid}-msg-2",
+                "sender": "assistant",
+                "created_at": "2026-03-14T10:01:00Z",
+                "updated_at": "2026-03-14T10:01:00Z",
+                "text": "Acknowledged: " + prompt,
+                "content": [{"type": "text", "text": "Acknowledged: " + prompt}],
+                "attachments": [],
+                "files": [],
+            },
+        ],
+    }
+
+
+class DiscoverBundleRootsTests(unittest.TestCase):
+    def test_single_bundle_directory_returns_one_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            _write_claude_bundle(bundle, [])
+            self.assertEqual(discover_bundle_roots(bundle), [bundle.resolve()])
+
+    def test_file_input_returns_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            _write_claude_bundle(bundle, [])
+            self.assertEqual(
+                discover_bundle_roots(bundle / "conversations.json"), [bundle.resolve()]
+            )
+
+    def test_multi_part_returns_sorted_subdirs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "split-export"
+            for name in ("part-3", "part-1", "part-2"):
+                _write_claude_bundle(parent / name, [])
+            result = discover_bundle_roots(parent)
+            self.assertEqual([p.name for p in result], ["part-1", "part-2", "part-3"])
+
+    def test_missing_files_raises_with_clear_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty = Path(tmpdir) / "nothing"
+            empty.mkdir()
+            with self.assertRaises(FileNotFoundError) as ctx:
+                discover_bundle_roots(empty)
+            self.assertIn("conversations.json", str(ctx.exception))
+            self.assertIn("multi-part", str(ctx.exception))
+
+    def test_directory_with_bundle_takes_precedence_over_subdirs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "ambiguous"
+            _write_claude_bundle(parent, [])
+            _write_claude_bundle(parent / "stray-subdir", [])
+            self.assertEqual(discover_bundle_roots(parent), [parent.resolve()])
+
+    def test_resolve_bundle_root_still_works_for_back_compat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            _write_claude_bundle(bundle, [])
+            self.assertEqual(resolve_bundle_root(bundle), bundle.resolve())
+
+
+class ImportMultiPartCorpusTests(unittest.TestCase):
+    def test_multi_part_concatenates_and_dedupes_by_uuid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir) / "split-export"
+            output = Path(tmpdir) / "out"
+
+            _write_claude_bundle(
+                parent / "part-1",
+                [
+                    _claude_conv("conv-A", "Alpha thread", "Configure A please"),
+                    _claude_conv("conv-B", "Beta thread", "Walk me through B"),
+                ],
+            )
+            _write_claude_bundle(
+                parent / "part-2",
+                [
+                    # conv-B duplicated across parts — must be skipped
+                    _claude_conv("conv-B", "Beta thread", "Walk me through B"),
+                    _claude_conv("conv-C", "Gamma thread", "Explain gamma"),
+                ],
+            )
+
+            result = import_claude_export_corpus(
+                parent, output, corpus_id="claude-multi-part-test", name="Claude Multi"
+            )
+
+            self.assertEqual(result["bundle_part_count"], 2)
+            self.assertEqual(result["bundle_part_names"], ["part-1", "part-2"])
+            self.assertEqual(result["duplicate_conversations_skipped"], 1)
+            self.assertEqual(result["thread_count"], 3, "Expected 3 unique threads after dedup")
+
+            self.assertTrue((output / "source" / "part-1" / "conversations.json").exists())
+            self.assertTrue((output / "source" / "part-2" / "conversations.json").exists())
+
+            readme_text = (output / "README.md").read_text(encoding="utf-8")
+            self.assertIn("Bundle parts: 2", readme_text)
+            self.assertIn("part-1", readme_text)
+
+    def test_single_bundle_keeps_flat_source_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = Path(tmpdir) / "export"
+            output = Path(tmpdir) / "out"
+            _write_claude_bundle(bundle, [_claude_conv("conv-X", "Solo", "Just one bundle")])
+
+            result = import_claude_export_corpus(bundle, output, corpus_id="claude-single-test")
+
+            self.assertEqual(result["bundle_part_count"], 1)
+            self.assertEqual(result["duplicate_conversations_skipped"], 0)
+            self.assertTrue((output / "source" / "conversations.json").exists())
+            self.assertFalse((output / "source" / "export").exists())
 
 
 if __name__ == "__main__":
