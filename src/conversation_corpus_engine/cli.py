@@ -41,6 +41,7 @@ from .governance_policy import load_or_create_promotion_policy
 from .governance_replay import build_policy_replay_payload, write_policy_replay_artifacts
 from .migration import seed_registry_from_staging
 from .paths import default_project_root
+from .persona_extract import extract_persona_lexicon, write_persona_extract_artifacts
 from .provider_catalog import default_source_drop_root
 from .provider_discovery import discover_provider_uploads, render_provider_discovery_text
 from .provider_import import import_provider_corpus
@@ -138,6 +139,14 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_register.add_argument("--corpus-id")
     corpus_register.add_argument("--name")
     corpus_register.add_argument("--default", action="store_true")
+
+    corpus_extract = corpus_sub.add_parser("persona-extract", help="Extract persona lexicons")
+    corpus_extract.add_argument("--persona", required=True, help="Persona ID (e.g. rob, claude)")
+    corpus_extract.add_argument("--source-corpus", type=Path, help="Path to session transcripts")
+    corpus_extract.add_argument("--project-root", type=Path, default=default_project_root())
+    corpus_extract.add_argument("--dry-run", action="store_true")
+    corpus_extract.add_argument("--write", action="store_true")
+    corpus_extract.add_argument("--json", action="store_true")
 
     federation = subparsers.add_parser("federation", help="Build federated outputs")
     federation_sub = federation.add_subparsers(dest="action", required=True)
@@ -707,6 +716,19 @@ def main() -> None:
                 f"{marker} {entry['corpus_id']}: {entry['name']} [{entry.get('status', 'active')}]"
             )
             print(f"  root: {entry['root']}")
+        return
+
+    if args.group == "corpus" and args.action == "persona-extract":
+        payload = extract_persona_lexicon(
+            args.project_root,
+            args.persona,
+            source_corpus=args.source_corpus,
+            dry_run=args.dry_run,
+        )
+        if args.write:
+            artifacts = write_persona_extract_artifacts(args.project_root, payload)
+            payload["artifacts_written"] = [str(p) for p in artifacts]
+        print(json.dumps(payload, indent=2))
         return
 
     if args.group == "corpus" and args.action == "register":
