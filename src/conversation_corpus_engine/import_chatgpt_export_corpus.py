@@ -123,6 +123,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name")
     parser.add_argument("--corpus-id")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--throttle",
+        type=float,
+        default=0.0,
+        help="CPU throttle for background runs: time.sleep(THROTTLE) every 50 iterations during near-duplicate detection (default: 0.0).",
+    )
     return parser.parse_args()
 
 
@@ -976,6 +982,7 @@ def main() -> int:
         args.output_root,
         corpus_id=args.corpus_id,
         name=args.name,
+        throttle=args.throttle,
     )
     print(json.dumps(result, indent=2) if args.json else json.dumps(result, indent=2))
     return 0
