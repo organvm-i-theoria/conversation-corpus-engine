@@ -237,8 +237,14 @@ def build_commercial_h1_readiness(
         "project_root": str(resolved_project_root),
         "source_drop_root": str(resolved_source_drop_root),
         "architecture_refs": [
-            str(REPO_ROOT / "docs/superpowers/specs/2026-03-31-cce-commercial-architecture-design.md"),
-            str(REPO_ROOT / "docs/superpowers/specs/2026-03-31-cce-commercial-architecture-expansion.md"),
+            str(
+                REPO_ROOT
+                / "docs/superpowers/specs/2026-03-31-cce-commercial-architecture-design.md"
+            ),
+            str(
+                REPO_ROOT
+                / "docs/superpowers/specs/2026-03-31-cce-commercial-architecture-expansion.md"
+            ),
         ],
         "summary": {
             "horizon": "H1",

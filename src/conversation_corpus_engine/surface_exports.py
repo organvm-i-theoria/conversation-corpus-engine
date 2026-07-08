@@ -318,9 +318,7 @@ def build_surface_manifest(
             "target_repo": "conversation-corpus--surfaces",
             "consumes": ["STATE_MODEL", "VALIDATION_RECORD"],
             "expected_output_signal": "INTERFACE_CONTRACT",
-            "readiness_command": (
-                "cce commercial h1 --project-root /path/to/project --write"
-            ),
+            "readiness_command": ("cce commercial h1 --project-root /path/to/project --write"),
         },
         "schemas": list_schemas(),
         "cli_surfaces": CLI_SURFACES,

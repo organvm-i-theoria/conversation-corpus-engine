@@ -36,7 +36,9 @@ def test_commercial_h1_artifacts_validate_against_schema(tmp_path: Path) -> None
     payload = build_commercial_h1_readiness(project_root)
 
     artifacts = write_commercial_h1_artifacts(project_root, payload)
-    validation = validate_json_file("commercial-h1-readiness", commercial_h1_json_path(project_root))
+    validation = validate_json_file(
+        "commercial-h1-readiness", commercial_h1_json_path(project_root)
+    )
 
     assert validation["valid"], validation["errors"]
     assert artifacts["json_path"].endswith("commercial-h1-readiness.json")

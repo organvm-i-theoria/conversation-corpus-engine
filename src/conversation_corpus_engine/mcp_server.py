@@ -47,7 +47,9 @@ def text_result(text: str, structured_content: dict[str, Any] | None = None) -> 
     return result
 
 
-def error_tool_result(message: str, structured_content: dict[str, Any] | None = None) -> dict[str, Any]:
+def error_tool_result(
+    message: str, structured_content: dict[str, Any] | None = None
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "content": [{"type": "text", "text": message}],
         "isError": True,
@@ -161,7 +163,10 @@ def call_cce_list_corpora(arguments: dict[str, Any]) -> dict[str, Any]:
         "corpora": corpora,
     }
     if corpora:
-        lines = [f"{item['corpus_id']}: {item['name']} [{item.get('status', 'active')}]" for item in corpora]
+        lines = [
+            f"{item['corpus_id']}: {item['name']} [{item.get('status', 'active')}]"
+            for item in corpora
+        ]
     else:
         lines = ["No registered corpora."]
     return text_result("\n".join(lines), payload)
