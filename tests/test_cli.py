@@ -110,6 +110,52 @@ def test_main_provider_readiness_json_mode_writes_reports(
     assert payload["report_paths"]["json_path"].endswith("readiness.json")
 
 
+def test_main_provider_authority_ingest_passes_frozen_snapshot_contract(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_ingest_authority_bundle(**kwargs: object) -> dict[str, object]:
+        calls.update(kwargs)
+        return {"snapshot_id": kwargs["snapshot_id"], "parity": {"parity_exact": True}}
+
+    monkeypatch.setattr(MODULE, "ingest_authority_bundle", fake_ingest_authority_bundle)
+    source_root = tmp_path / "redacted-bundle"
+    manifest = tmp_path / "provider-manifest.json"
+    output_root = tmp_path / "output"
+
+    _run_main(
+        monkeypatch,
+        [
+            "provider",
+            "authority-ingest",
+            "--source-root",
+            str(source_root),
+            "--provider-manifest",
+            str(manifest),
+            "--output-root",
+            str(output_root),
+            "--snapshot-id",
+            "snapshot-fixture",
+            "--captured-at",
+            "2026-07-16T16:00:00Z",
+            "--custody-pointer",
+            "custody:snapshot-fixture",
+        ],
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert calls == {
+        "output_root": output_root,
+        "source_root": source_root,
+        "provider_manifest": manifest,
+        "snapshot_id": "snapshot-fixture",
+        "captured_at": "2026-07-16T16:00:00Z",
+        "custody_pointer": "custody:snapshot-fixture",
+    }
+    assert payload["parity"]["parity_exact"] is True
+
+
 def test_main_surface_bundle_prints_json_payload(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

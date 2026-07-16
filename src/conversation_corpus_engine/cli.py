@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .authority_ingest import ingest_authority_bundle
 from .chatgpt_local_session import (
     discover_chatgpt_projects,
     fetch_chatgpt_project,
@@ -42,7 +43,7 @@ from .governance_replay import build_policy_replay_payload, write_policy_replay_
 from .migration import seed_registry_from_staging
 from .paths import default_project_root
 from .persona_extract import extract_persona_lexicon, write_persona_extract_artifacts
-from .provider_catalog import default_source_drop_root
+from .provider_catalog import PROVIDER_CONFIG, default_source_drop_root
 from .provider_discovery import discover_provider_uploads, render_provider_discovery_text
 from .provider_import import import_provider_corpus
 from .provider_readiness import (
@@ -110,6 +111,8 @@ from .triage import (
     write_entity_alias_review_sample_summary_artifacts,
     write_entity_alias_review_scoreboard_artifacts,
 )
+
+PROVIDER_CHOICES = sorted(PROVIDER_CONFIG)
 
 
 def parse_threshold_overrides(values: list[str] | None) -> dict[str, float]:
@@ -190,16 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     provider_import.add_argument("--project-root", type=Path, default=default_project_root())
     provider_import.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
         required=True,
     )
     provider_import.add_argument("--mode", choices=["upload", "local-session"], default="upload")
@@ -218,16 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_bootstrap.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
         required=True,
     )
     provider_bootstrap.add_argument("--project-root", type=Path, default=default_project_root())
@@ -240,16 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_refresh.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
         required=True,
     )
     provider_refresh.add_argument("--project-root", type=Path, default=default_project_root())
@@ -272,6 +248,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Voluntary CPU yield interval in hot loops (0=disabled, 0.001=recommended for background)",
     )
     provider_refresh.add_argument("--json", action="store_true")
+    provider_authority_ingest = provider_sub.add_parser(
+        "authority-ingest",
+        help="Project a frozen session-meta redacted bundle into authority-aware contracts",
+    )
+    provider_authority_ingest.add_argument("--source-root", type=Path)
+    provider_authority_ingest.add_argument("--provider-manifest", type=Path)
+    provider_authority_ingest.add_argument("--output-root", type=Path, required=True)
+    provider_authority_ingest.add_argument("--snapshot-id", required=True)
+    provider_authority_ingest.add_argument("--captured-at", required=True)
+    provider_authority_ingest.add_argument("--custody-pointer", required=True)
 
     project = subparsers.add_parser("project", help="ChatGPT project extraction and lifecycle")
     project_sub = project.add_subparsers(dest="action", required=True)
@@ -343,16 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
     source_policy_show.add_argument("--project-root", type=Path, default=default_project_root())
     source_policy_show.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
         required=True,
     )
     source_policy_show.add_argument("--json", action="store_true")
@@ -360,16 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
     source_policy_set.add_argument("--project-root", type=Path, default=default_project_root())
     source_policy_set.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
         required=True,
     )
     source_policy_set.add_argument("--primary-root", type=Path, required=True)
@@ -436,16 +404,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_stage.add_argument("--live-corpus-id")
     candidate_stage.add_argument(
         "--provider",
-        choices=[
-            "chatgpt",
-            "claude",
-            "gemini",
-            "grok",
-            "perplexity",
-            "copilot",
-            "deepseek",
-            "mistral",
-        ],
+        choices=PROVIDER_CHOICES,
     )
     candidate_stage.add_argument("--note", default="")
     candidate_stage.add_argument("--json", action="store_true")
@@ -845,6 +804,18 @@ def main() -> None:
             promote=args.promote,
             note=args.note,
             throttle=args.throttle,
+        )
+        print(json.dumps(payload, indent=2))
+        return
+
+    if args.group == "provider" and args.action == "authority-ingest":
+        payload = ingest_authority_bundle(
+            output_root=args.output_root,
+            source_root=args.source_root,
+            provider_manifest=args.provider_manifest,
+            snapshot_id=args.snapshot_id,
+            captured_at=args.captured_at,
+            custody_pointer=args.custody_pointer,
         )
         print(json.dumps(payload, indent=2))
         return

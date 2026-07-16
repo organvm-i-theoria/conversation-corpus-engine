@@ -7,6 +7,7 @@
 It owns:
 
 - provider/source registration
+- provider-neutral redacted-bundle normalization and authority projection
 - provider inbox discovery and readiness reporting
 - corpus validation
 - source freshness and snapshot logic
@@ -68,9 +69,9 @@ cce corpus list --project-root /path/to/project
 cce corpus register /path/to/corpus --project-root /path/to/project --name "Notes Memory"
 cce federation build --project-root /path/to/project
 cce provider discover --project-root /path/to/project --source-drop-root /path/to/source-drop
+cce provider authority-ingest --source-root /path/to/redacted-bundle --provider-manifest /path/to/provider-manifest.json --output-root /path/to/output --snapshot-id frozen-snapshot --captured-at 2026-07-16T16:00:00Z --custody-pointer custody:frozen-snapshot
 cce provider import --provider chatgpt --source-drop-root /path/to/source-drop --register --build
 cce provider import --provider gemini --source-drop-root /path/to/source-drop --register --build
-cce provider import --provider claude --mode local-session --local-root "/Users/you/Library/Application Support/Claude"
 cce provider bootstrap-eval --provider claude --project-root /path/to/project --full-eval
 cce provider readiness --project-root /path/to/project --source-drop-root /path/to/source-drop --write
 cce provider refresh --provider chatgpt --project-root /path/to/project --source-drop-root /path/to/source-drop
@@ -97,6 +98,33 @@ cce source freshness /path/to/corpus
 cce-mcp --project-root /path/to/project
 ```
 
+### Provider-neutral authority ingest
+
+`provider authority-ingest` is the default path for new source acquisition. It reads only a
+frozen, redacted `session-meta` atom bundle. It never opens browser profiles, cookies, tokens,
+OAuth material, or provider application stores. The runtime provider manifest separates source
+families, aliases, adapter IDs, custody root environment keys, authority policy, and owner
+blockers. Adding or renaming a provider is a manifest-only change when an existing format adapter
+applies.
+
+The bundled `provider-manifest.organvm.v1.json` is explicitly instance configuration. The
+`provider-manifest.example.v1.json` reusable template contains only generic placeholders. Set
+`CCE_PROVIDER_MANIFEST` or pass `--provider-manifest` to select another runtime manifest.
+
+Each frozen run writes deterministic, body-free public projections:
+
+- `source-envelope.v1.jsonl`
+- `normalized-events.v1.jsonl`
+- `quarantine.jsonl`
+- `owner-blockers.jsonl`
+- `coverage-receipt.v1.json`
+- `parity-receipt.v1.json`
+
+Malformed rows quarantine without stopping valid siblings. Unknown families and missing roots
+remain explicit owner blockers. `exact_all` means every discovered unit was classified exactly
+once; `ready` additionally requires every unit to be parsed with no residual debt. Existing export
+importers remain compatibility paths until a frozen run reports both exact parity and readiness.
+
 ## MCP Tools
 
 `cce-mcp` serves MCP over stdio and never writes non-protocol output to stdout. It
@@ -119,6 +147,9 @@ currently exposes:
 - `src/conversation_corpus_engine/import_claude_local_session_corpus.py` — Claude local-session import
 - `src/conversation_corpus_engine/import_chatgpt_export_corpus.py` — ChatGPT conversations.json export import
 - `src/conversation_corpus_engine/provider_discovery.py` — source-drop inbox discovery
+- `src/conversation_corpus_engine/source_adapter_registry.py` — provider-neutral redacted-bundle adapter registry
+- `src/conversation_corpus_engine/authority_projection.py` — role-aware authority and lane projection
+- `src/conversation_corpus_engine/authority_ingest.py` — deterministic envelope, event, quarantine, coverage, and parity generation
 - `src/conversation_corpus_engine/provider_import.py` — provider import/onboarding orchestration
 - `src/conversation_corpus_engine/provider_refresh.py` — provider refresh orchestration over import, evaluation, and corpus promotion
 - `src/conversation_corpus_engine/provider_readiness.py` — provider lane readiness and report writing
