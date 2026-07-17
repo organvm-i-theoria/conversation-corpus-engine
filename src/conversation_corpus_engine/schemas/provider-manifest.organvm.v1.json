@@ -75,7 +75,7 @@
       "default_corpus_name": "Git Artifact Memory",
       "source_family_aliases": ["git-artifact"],
       "source_contract": {"kind": "session-meta-redacted-bundle", "root_env": "CCE_SESSION_META_BUNDLE_ROOT"},
-      "authority_policy": "native-role",
+      "authority_policy": "manifest-lane",
       "owner_reference": "repo:organvm/session-meta",
       "blocker": {"owner_reference": "repo:organvm/session-meta", "failed_predicate": "manifested immutable documents are present in the frozen redacted source bundle", "next_action": "publish the missing immutable-document atoms through session-meta and rerun authority ingest"},
       "calibration_only": true

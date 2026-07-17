@@ -37,6 +37,7 @@ class ProjectionCandidate:
     record: RedactedSourceRecord
     envelope: dict[str, Any]
     event: dict[str, Any]
+    authority_policy: str
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -104,13 +105,26 @@ def build_projection_candidate(
     raw_unit_content_hash: str,
 ) -> ProjectionCandidate:
     authority_policy = provider.get("authority_policy")
-    if authority_policy != "native-role":
+    if authority_policy not in {"manifest-lane", "native-role"}:
         raise AuthorityProjectionError(f"unsupported authority_policy: {authority_policy!r}")
     normalized_timestamp = normalize_timestamp(record.event_timestamp)
     normalized_captured_at = normalize_timestamp(captured_at)
     normalized_role = normalize_role(record.role, record.kind)
     authority_class, authority_detail, origin_lane = _ROLE_POLICY[normalized_role]
-    if (
+    if authority_policy == "manifest-lane":
+        manifest_lane = record.metadata.get("manifest_lane")
+        if manifest_lane is None:
+            raise AuthorityProjectionError(
+                "manifest-lane authority_policy requires manifest_lane metadata"
+            )
+        if manifest_lane != "artifact":
+            raise AuthorityProjectionError(
+                "manifest_lane must be 'artifact' for manifest-lane authority_policy"
+            )
+        authority_class = "artifact"
+        authority_detail = "manifested_artifact"
+        origin_lane = "artifact"
+    elif (
         record.metadata.get("transport_classification") == "adapter-native"
         and record.metadata.get("authority_class") == "transport_echo"
     ):
@@ -228,7 +242,12 @@ def build_projection_candidate(
             f"raw-unit:{raw_unit_id}",
         ],
     }
-    return ProjectionCandidate(record=record, envelope=envelope, event=event)
+    return ProjectionCandidate(
+        record=record,
+        envelope=envelope,
+        event=event,
+        authority_policy=authority_policy,
+    )
 
 
 def apply_reviewed_adoptions(candidates: list[ProjectionCandidate]) -> None:
@@ -245,6 +264,8 @@ def apply_reviewed_adoptions(candidates: list[ProjectionCandidate]) -> None:
 
     for candidate in candidates:
         if candidate.event["normalized_role"] != "assistant":
+            continue
+        if candidate.authority_policy == "manifest-lane":
             continue
         adoption_event_id = candidate.record.metadata.get("adoption_event_id")
         if not isinstance(adoption_event_id, str):

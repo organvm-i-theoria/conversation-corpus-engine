@@ -119,7 +119,7 @@ def test_instance_manifest_covers_native_cli_and_export_fixtures() -> None:
     assert git_artifact["adapter_type"] == "immutable-document"
     assert git_artifact["default_adapter_id"] == "session-meta-redacted-jsonl-v1"
     assert git_artifact["source_family_aliases"] == ["git-artifact"]
-    assert git_artifact["authority_policy"] == "native-role"
+    assert git_artifact["authority_policy"] == "manifest-lane"
 
 
 def test_runtime_manifest_accepts_renamed_and_new_providers_without_code_changes(

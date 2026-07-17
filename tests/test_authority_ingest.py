@@ -420,11 +420,13 @@ def test_immutable_document_authority_uses_only_config_and_native_roles(
                 "provider-renamed-at-runtime",
                 "family-renamed-at-runtime",
                 adapter_type="immutable-document",
+                authority_policy="manifest-lane",
             )
         ],
     )
     native_metadata = {
         "format_adapter": "immutable-document",
+        "manifest_lane": "artifact",
         "native_identity_namespace": "configured-document-v1",
     }
     write_atoms(
@@ -492,17 +494,92 @@ def test_immutable_document_authority_uses_only_config_and_native_roles(
     }
 
     assert set(events) == {"assistant", "system", "tool"}
-    assert {role: event["authority_class"] for role, event in events.items()} == {
-        "assistant": "artifact",
-        "system": "system_metadata",
-        "tool": "transport_echo",
+    assert {event["authority_class"] for event in events.values()} == {"artifact"}
+    assert {event["transport_metadata"]["authority_detail"] for event in events.values()} == {
+        "manifested_artifact"
     }
     assert {event["transport_metadata"]["origin_lane"] for event in events.values()} == {"artifact"}
+    assert {event["transport_metadata"]["effective_lane"] for event in events.values()} == {
+        "artifact"
+    }
     assert {event["transport_metadata"]["provider_id"] for event in events.values()} == {
         "provider-renamed-at-runtime"
     }
     assert {event["format_adapter"] for event in events.values()} == {"immutable-document"}
     assert result["coverage"]["ready"] is True
+
+
+def test_manifest_lane_missing_and_invalid_metadata_quarantine_independently(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "providers.json"
+    atoms_path = tmp_path / "atoms.jsonl"
+    write_manifest(
+        manifest,
+        [
+            provider("provider-valid", "family-valid"),
+            provider(
+                "provider-manifest-lane",
+                "family-manifest-lane",
+                adapter_type="immutable-document",
+                authority_policy="manifest-lane",
+            ),
+        ],
+    )
+    write_atoms(
+        atoms_path,
+        [
+            atom(
+                source="family-valid",
+                role="user",
+                text="Valid native-role sibling.",
+                atom_id="valid-native-role",
+                ordinal=0,
+            ),
+            atom(
+                source="family-manifest-lane",
+                role="system",
+                text="Valid manifested artifact.",
+                atom_id="valid-manifest-lane",
+                ordinal=1,
+                metadata={"manifest_lane": "artifact"},
+            ),
+            atom(
+                source="family-manifest-lane",
+                role="tool",
+                text="Missing manifested lane.",
+                atom_id="missing-manifest-lane",
+                ordinal=2,
+            ),
+            atom(
+                source="family-manifest-lane",
+                role="assistant",
+                text="Invalid manifested lane.",
+                atom_id="invalid-manifest-lane",
+                ordinal=3,
+                metadata={"manifest_lane": "operator_intent"},
+            ),
+        ],
+    )
+
+    result = run_ingest(
+        output_root=tmp_path / "out",
+        atoms_path=atoms_path,
+        manifest_path=manifest,
+    )
+    events = read_jsonl(result["paths"]["normalized_events"])
+    quarantines = read_jsonl(result["paths"]["quarantine"])
+
+    assert {event["normalized_role"] for event in events} == {"operator", "system"}
+    assert len(quarantines) == 2
+    assert {quarantine["diagnostic"]["message"] for quarantine in quarantines} == {
+        "manifest-lane authority_policy requires manifest_lane metadata",
+        "manifest_lane must be 'artifact' for manifest-lane authority_policy",
+    }
+    assert result["coverage"]["counts"]["parsed"] == 2
+    assert result["coverage"]["counts"]["quarantined"] == 2
+    assert result["coverage"]["exact_all"] is True
+    assert result["coverage"]["ready"] is False
 
 
 def test_unsupported_authority_policy_quarantines_without_stopping_valid_sibling(
