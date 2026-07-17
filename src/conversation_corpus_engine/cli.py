@@ -882,7 +882,6 @@ def main() -> None:
             input_root=args.input_root,
             output_root=args.output_root,
             snapshot_id=args.snapshot_id,
-            captured_at=args.captured_at,
         )
         print(json.dumps(payload, indent=2))
         return
@@ -905,6 +904,7 @@ def main() -> None:
             input_root=args.input_root,
             output_root=args.output_root,
             snapshot_id=args.snapshot_id,
+            captured_at=args.captured_at,
         )
         print(json.dumps({"stage": "classify", "predicate": "passed"}, indent=2))
         return

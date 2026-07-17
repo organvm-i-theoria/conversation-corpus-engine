@@ -157,6 +157,93 @@ def test_main_provider_authority_ingest_passes_frozen_snapshot_contract(
     assert payload["parity"]["parity_exact"] is True
 
 
+def test_main_provider_authority_classify_cadence_uses_stage_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_run_authority_classify_stage(**kwargs: object) -> dict[str, object]:
+        calls.update(kwargs)
+        return {"stage": "classify", "snapshot_id": kwargs["snapshot_id"]}
+
+    monkeypatch.setattr(
+        MODULE,
+        "run_authority_classify_stage",
+        fake_run_authority_classify_stage,
+    )
+    input_root = tmp_path / "parse"
+    output_root = tmp_path / "classify"
+
+    _run_main(
+        monkeypatch,
+        [
+            "provider",
+            "authority-classify-cadence",
+            "--input-root",
+            str(input_root),
+            "--output-root",
+            str(output_root),
+            "--snapshot-id",
+            "snapshot-fixture",
+        ],
+    )
+
+    assert calls == {
+        "input_root": input_root,
+        "output_root": output_root,
+        "snapshot_id": "snapshot-fixture",
+    }
+    assert json.loads(capsys.readouterr().out)["stage"] == "classify"
+
+
+def test_main_provider_authority_classify_predicate_binds_capture_time(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_assert_classify_predicate(**kwargs: object) -> None:
+        calls.update(kwargs)
+
+    monkeypatch.setattr(
+        MODULE,
+        "assert_classify_predicate",
+        fake_assert_classify_predicate,
+    )
+    input_root = tmp_path / "parse"
+    output_root = tmp_path / "classify"
+
+    _run_main(
+        monkeypatch,
+        [
+            "provider",
+            "authority-classify-predicate",
+            "--input-root",
+            str(input_root),
+            "--output-root",
+            str(output_root),
+            "--snapshot-id",
+            "snapshot-fixture",
+            "--captured-at",
+            "2026-07-16T16:00:00Z",
+        ],
+    )
+
+    assert calls == {
+        "input_root": input_root,
+        "output_root": output_root,
+        "snapshot_id": "snapshot-fixture",
+        "captured_at": "2026-07-16T16:00:00Z",
+    }
+    assert json.loads(capsys.readouterr().out) == {
+        "stage": "classify",
+        "predicate": "passed",
+    }
+
+
 def test_main_surface_bundle_prints_json_payload(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
