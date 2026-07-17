@@ -120,14 +120,19 @@ def atom(
 
 
 def provider(
-    provider_id: str, alias: str, *, root_env: str = "CCE_TEST_BUNDLE_ROOT"
+    provider_id: str,
+    alias: str,
+    *,
+    root_env: str = "CCE_TEST_BUNDLE_ROOT",
+    adapter_type: str = "adapter-reusable",
+    authority_policy: str = "native-role",
 ) -> dict[str, Any]:
     return {
         "provider_id": provider_id,
         "display_name": f"Configured {provider_id}",
         "adapter_state": "supported",
         "default_adapter_id": "session-meta-redacted-jsonl-v1",
-        "adapter_type": "adapter-reusable",
+        "adapter_type": adapter_type,
         "discovery_mode": "redacted-bundle",
         "inbox_rel": f"{provider_id}/inbox",
         "default_corpus_id": f"{provider_id}-memory",
@@ -137,7 +142,7 @@ def provider(
             "kind": "session-meta-redacted-bundle",
             "root_env": root_env,
         },
-        "authority_policy": "native-role",
+        "authority_policy": authority_policy,
         "owner_reference": "owner:test",
         "blocker": {
             "owner_reference": "owner:test",
@@ -401,6 +406,157 @@ def test_provider_manifest_reorder_and_new_provider_are_config_only(tmp_path: Pa
     assert (tmp_path / "first" / "coverage-receipt.v1.json").read_bytes() == (
         tmp_path / "second" / "coverage-receipt.v1.json"
     ).read_bytes()
+
+
+def test_immutable_document_authority_uses_only_config_and_native_roles(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "providers.json"
+    atoms_path = tmp_path / "atoms.jsonl"
+    write_manifest(
+        manifest,
+        [
+            provider(
+                "provider-renamed-at-runtime",
+                "family-renamed-at-runtime",
+                adapter_type="immutable-document",
+            )
+        ],
+    )
+    native_metadata = {
+        "format_adapter": "immutable-document",
+        "native_identity_namespace": "configured-document-v1",
+    }
+    write_atoms(
+        atoms_path,
+        [
+            atom(
+                source="family-renamed-at-runtime",
+                role="system",
+                text="Immutable specification.",
+                atom_id="specification",
+                ordinal=0,
+                kind="document",
+                metadata={
+                    **native_metadata,
+                    "native_identifiers": {
+                        "repository": "owner/repository",
+                        "commit": "a" * 40,
+                        "path": "specs/SPEC-000.md",
+                    },
+                },
+            ),
+            atom(
+                source="family-renamed-at-runtime",
+                role="tool",
+                text="Immutable operator prompt transport.",
+                atom_id="operator-prompt-export",
+                ordinal=1,
+                kind="document",
+                metadata={
+                    **native_metadata,
+                    "native_identifiers": {
+                        "repository": "owner/prompt-custody",
+                        "commit": "b" * 40,
+                        "path": "exports/operator-prompts.txt",
+                    },
+                },
+            ),
+            atom(
+                source="family-renamed-at-runtime",
+                role="assistant",
+                text="Immutable assistant plan.",
+                atom_id="assistant-plan",
+                ordinal=2,
+                kind="document",
+                metadata={
+                    **native_metadata,
+                    "native_identifiers": {
+                        "repository": "owner/session-custody",
+                        "commit": "c" * 40,
+                        "path": "plans/assistant-plan.md",
+                    },
+                },
+            ),
+        ],
+    )
+
+    result = run_ingest(
+        output_root=tmp_path / "out",
+        atoms_path=atoms_path,
+        manifest_path=manifest,
+    )
+    events = {
+        event["normalized_role"]: event
+        for event in read_jsonl(result["paths"]["normalized_events"])
+    }
+
+    assert set(events) == {"assistant", "system", "tool"}
+    assert {role: event["authority_class"] for role, event in events.items()} == {
+        "assistant": "artifact",
+        "system": "system_metadata",
+        "tool": "transport_echo",
+    }
+    assert {event["transport_metadata"]["origin_lane"] for event in events.values()} == {"artifact"}
+    assert {event["transport_metadata"]["provider_id"] for event in events.values()} == {
+        "provider-renamed-at-runtime"
+    }
+    assert {event["format_adapter"] for event in events.values()} == {"immutable-document"}
+    assert result["coverage"]["ready"] is True
+
+
+def test_unsupported_authority_policy_quarantines_without_stopping_valid_sibling(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "providers.json"
+    atoms_path = tmp_path / "atoms.jsonl"
+    write_manifest(
+        manifest,
+        [
+            provider("provider-valid", "family-valid"),
+            provider(
+                "provider-invalid-policy",
+                "family-invalid-policy",
+                authority_policy="unregistered-policy",
+            ),
+        ],
+    )
+    write_atoms(
+        atoms_path,
+        [
+            atom(
+                source="family-valid",
+                role="user",
+                text="Valid sibling.",
+                atom_id="valid-sibling",
+                ordinal=0,
+            ),
+            atom(
+                source="family-invalid-policy",
+                role="assistant",
+                text="Policy has no registered projection.",
+                atom_id="invalid-policy",
+                ordinal=1,
+            ),
+        ],
+    )
+
+    result = run_ingest(
+        output_root=tmp_path / "out",
+        atoms_path=atoms_path,
+        manifest_path=manifest,
+    )
+    events = read_jsonl(result["paths"]["normalized_events"])
+    quarantines = read_jsonl(result["paths"]["quarantine"])
+
+    assert [event["normalized_role"] for event in events] == ["operator"]
+    assert len(quarantines) == 1
+    assert quarantines[0]["diagnostic"]["code"] == "invalid-authority-projection"
+    assert "unsupported authority_policy" in quarantines[0]["diagnostic"]["message"]
+    assert result["coverage"]["counts"]["parsed"] == 1
+    assert result["coverage"]["counts"]["quarantined"] == 1
+    assert result["coverage"]["exact_all"] is True
+    assert result["coverage"]["ready"] is False
 
 
 def test_malformed_unknown_and_missing_sources_do_not_stop_valid_sibling(tmp_path: Path) -> None:

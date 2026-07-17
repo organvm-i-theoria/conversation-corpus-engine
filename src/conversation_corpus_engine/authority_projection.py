@@ -103,6 +103,9 @@ def build_projection_candidate(
     custody_pointer: str,
     raw_unit_content_hash: str,
 ) -> ProjectionCandidate:
+    authority_policy = provider.get("authority_policy")
+    if authority_policy != "native-role":
+        raise AuthorityProjectionError(f"unsupported authority_policy: {authority_policy!r}")
     normalized_timestamp = normalize_timestamp(record.event_timestamp)
     normalized_captured_at = normalize_timestamp(captured_at)
     normalized_role = normalize_role(record.role, record.kind)
