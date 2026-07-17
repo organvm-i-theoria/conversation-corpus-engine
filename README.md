@@ -161,9 +161,12 @@ cce provider authority-classify-cadence \
 The commands consume Limen's injected `LIMEN_GOV_*` execution variables and
 write one bounded transaction child to `LIMEN_GOV_STAGE_METRICS_OUT`.
 `LIMEN_GOV_MAX_ITEMS` bounds the census raw-unit or promotion denominator.
-On proof traversals, they do not rerun ingest or rewrite outputs; they emit a
-`skipped_completed` child bound to the exact prior child receipt and report zero
-new events. The independent predicate commands are:
+On proof traversals, the parse owner reruns the exact ingest in a temporary
+directory and requires every governed artifact and projection to be
+byte-identical; the classify owner revalidates its byte projection. Neither
+owner rewrites governed outputs. Both emit a `skipped_completed` child bound to
+the exact prior child receipt and report zero new events. The independent
+predicate commands are:
 
 ```bash
 cce provider authority-parse-predicate \
