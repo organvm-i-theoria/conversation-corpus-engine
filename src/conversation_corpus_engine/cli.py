@@ -726,8 +726,8 @@ def main() -> None:
             dry_run=args.dry_run,
         )
         if args.write and not args.dry_run:
-            artifacts = write_persona_extract_artifacts(args.project_root, payload)
-            payload["artifacts_written"] = [str(p) for p in artifacts]
+            persona_artifact_paths = write_persona_extract_artifacts(args.project_root, payload)
+            payload["artifacts_written"] = [str(path) for path in persona_artifact_paths]
         if args.json:
             print(json.dumps(payload, indent=2))
         else:
@@ -1005,8 +1005,8 @@ def main() -> None:
             args.project_root,
             source_drop_root=args.source_drop_root,
         )
-        artifacts = write_surface_manifest_artifacts(args.project_root, payload)
-        print(json.dumps({**payload, "artifacts_written": artifacts}, indent=2))
+        manifest_artifacts = write_surface_manifest_artifacts(args.project_root, payload)
+        print(json.dumps({**payload, "artifacts_written": manifest_artifacts}, indent=2))
         return
 
     if args.group == "surface" and args.action == "context":
@@ -1014,8 +1014,8 @@ def main() -> None:
             args.project_root,
             source_drop_root=args.source_drop_root,
         )
-        artifacts = write_mcp_context_artifacts(args.project_root, payload)
-        print(json.dumps({**payload, "artifacts_written": artifacts}, indent=2))
+        context_artifacts = write_mcp_context_artifacts(args.project_root, payload)
+        print(json.dumps({**payload, "artifacts_written": context_artifacts}, indent=2))
         return
 
     if args.group == "surface" and args.action == "bundle":
@@ -1271,23 +1271,27 @@ def main() -> None:
                 sample_batches=args.sample_batches,
                 batch_offset=args.batch_offset,
             )
-        artifacts = None
+        assist_artifacts = None
         if args.write:
             if args.sample_groups:
-                artifacts = write_entity_alias_review_sample_artifacts(args.project_root, payload)
+                assist_artifacts = write_entity_alias_review_sample_artifacts(
+                    args.project_root, payload
+                )
             else:
-                artifacts = write_entity_alias_review_assist_artifacts(args.project_root, payload)
+                assist_artifacts = write_entity_alias_review_assist_artifacts(
+                    args.project_root, payload
+                )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": assist_artifacts}, indent=2))
             return
         if args.sample_groups:
             print(render_entity_alias_review_sample(payload))
         else:
             print(render_entity_alias_review_assist(payload, group_limit=args.group_limit))
-        if artifacts:
+        if assist_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in assist_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1300,19 +1304,19 @@ def main() -> None:
             )
         except ValueError as exc:
             parser.error(str(exc))
-        artifacts = (
+        campaign_artifacts = (
             write_entity_alias_review_campaign_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": campaign_artifacts}, indent=2))
             return
         print(render_entity_alias_review_campaign(payload))
-        if artifacts:
+        if campaign_artifacts:
             print("")
             print("Artifacts:")
-            for key, value in artifacts.items():
+            for key, value in campaign_artifacts.items():
                 if key == "scenario_artifacts":
                     for label, scenario_artifacts in value.items():
                         print(f"  scenario {label}:")
@@ -1327,37 +1331,37 @@ def main() -> None:
 
     if args.group == "review" and args.action == "campaign-index":
         payload = build_entity_alias_review_campaign_index(args.project_root)
-        artifacts = (
+        campaign_index_artifacts = (
             write_entity_alias_review_campaign_index_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": campaign_index_artifacts}, indent=2))
             return
         print(render_entity_alias_review_campaign_index(payload))
-        if artifacts:
+        if campaign_index_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in campaign_index_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
     if args.group == "review" and args.action == "packet-hydrate":
         payload = hydrate_entity_alias_review_sample_packet(args.path)
-        artifacts = (
+        packet_hydration_artifacts = (
             write_entity_alias_review_packet_hydration_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": packet_hydration_artifacts}, indent=2))
             return
         print(render_entity_alias_review_packet_hydration(payload))
-        if artifacts:
+        if packet_hydration_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in packet_hydration_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1367,19 +1371,19 @@ def main() -> None:
             min_reject_precision=args.min_reject_precision,
             min_adjudicated=args.min_adjudicated,
         )
-        artifacts = (
+        scoreboard_artifacts = (
             write_entity_alias_review_scoreboard_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": scoreboard_artifacts}, indent=2))
             return
         print(render_entity_alias_review_scoreboard(payload))
-        if artifacts:
+        if scoreboard_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in scoreboard_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1391,19 +1395,19 @@ def main() -> None:
             packet_ids=args.packet_ids,
             campaign_ids=args.campaign_ids,
         )
-        artifacts = (
+        rollup_artifacts = (
             write_entity_alias_review_rollup_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": rollup_artifacts}, indent=2))
             return
         print(render_entity_alias_review_rollup(payload))
-        if artifacts:
+        if rollup_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in rollup_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1417,19 +1421,19 @@ def main() -> None:
             min_reject_precision=args.min_reject_precision,
             min_adjudicated=args.min_adjudicated,
         )
-        artifacts = (
+        reject_stage_artifacts = (
             write_entity_alias_reject_stage_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": reject_stage_artifacts}, indent=2))
             return
         print(render_entity_alias_reject_stage(payload))
-        if artifacts:
+        if reject_stage_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in reject_stage_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1443,55 +1447,55 @@ def main() -> None:
             min_reject_precision=args.min_reject_precision,
             min_adjudicated=args.min_adjudicated,
         )
-        artifacts = (
+        apply_plan_artifacts = (
             write_entity_alias_review_apply_plan_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": apply_plan_artifacts}, indent=2))
             return
         print(render_entity_alias_review_apply_plan(payload))
-        if artifacts:
+        if apply_plan_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in apply_plan_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
     if args.group == "review" and args.action == "sample-summary":
         payload = summarize_entity_alias_review_sample(args.path)
-        artifacts = (
+        sample_summary_artifacts = (
             write_entity_alias_review_sample_summary_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": sample_summary_artifacts}, indent=2))
             return
         print(render_entity_alias_review_sample_summary(payload))
-        if artifacts:
+        if sample_summary_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in sample_summary_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
     if args.group == "review" and args.action == "sample-propose":
         payload = propose_entity_alias_review_sample(args.path)
-        artifacts = (
+        sample_proposal_artifacts = (
             write_entity_alias_review_sample_proposal_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": sample_proposal_artifacts}, indent=2))
             return
         print(render_entity_alias_review_sample_proposal(payload))
-        if artifacts:
+        if sample_proposal_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in sample_proposal_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
@@ -1500,19 +1504,19 @@ def main() -> None:
             args.sample_path,
             args.proposal_path,
         )
-        artifacts = (
+        sample_comparison_artifacts = (
             write_entity_alias_review_sample_comparison_artifacts(args.project_root, payload)
             if args.write
             else None
         )
         if args.json:
-            print(json.dumps({**payload, "artifacts": artifacts}, indent=2))
+            print(json.dumps({**payload, "artifacts": sample_comparison_artifacts}, indent=2))
             return
         print(render_entity_alias_review_sample_comparison(payload))
-        if artifacts:
+        if sample_comparison_artifacts:
             print("")
             print("Artifacts:")
-            for key, path in artifacts.items():
+            for key, path in sample_comparison_artifacts.items():
                 print(f"  {key.removesuffix('_path')}: {path}")
         return
 
