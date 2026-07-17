@@ -29,6 +29,7 @@ class RedactedSourceRecord:
     content_sha: str
     blob_shas: tuple[str, ...]
     raw_unit_ids: tuple[str, ...]
+    raw_unit_content_hashes: dict[str, str]
     native_identifiers: dict[str, str]
     attachments: tuple[dict[str, str], ...]
     metadata: dict[str, Any]
@@ -228,6 +229,23 @@ def _parse_record(
         not isinstance(value, str) or not value.startswith("raw_") for value in raw_unit_values
     ):
         raise SourceBundleError("meta.raw_unit_ids must contain canonical raw unit ids")
+    raw_unit_content_hash_values = metadata.get("raw_unit_content_hashes", {})
+    if not isinstance(raw_unit_content_hash_values, dict) or any(
+        not isinstance(key, str)
+        or not key.startswith("raw_")
+        or not isinstance(value, str)
+        or not value.startswith("sha256:")
+        or not _is_sha256(value[7:])
+        for key, value in raw_unit_content_hash_values.items()
+    ):
+        raise SourceBundleError(
+            "meta.raw_unit_content_hashes must map canonical raw unit ids "
+            "to SHA-256 contract hashes"
+        )
+    if raw_unit_content_hash_values and set(raw_unit_content_hash_values) != set(raw_unit_values):
+        raise SourceBundleError(
+            "meta.raw_unit_content_hashes keys must exactly match meta.raw_unit_ids"
+        )
     native_identifiers_value = metadata.get("native_identifiers", {})
     if not isinstance(native_identifiers_value, dict) or any(
         not isinstance(key, str)
@@ -259,6 +277,9 @@ def _parse_record(
         content_sha=content_sha,
         blob_shas=tuple(sorted(set(value.strip() for value in blob_shas))),
         raw_unit_ids=tuple(sorted(set(raw_unit_values))),
+        raw_unit_content_hashes={
+            str(key): str(value) for key, value in sorted(raw_unit_content_hash_values.items())
+        },
         native_identifiers=native_identifiers,
         attachments=attachments,
         metadata=metadata,

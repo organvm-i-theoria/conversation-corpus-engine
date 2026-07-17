@@ -100,6 +100,10 @@ def atom(
     atom_metadata = dict(metadata or {})
     if raw_unit_ids is not None:
         atom_metadata["raw_unit_ids"] = raw_unit_ids
+        atom_metadata["raw_unit_content_hashes"] = {
+            raw_unit_id: sha256_contract({"raw_unit_id": raw_unit_id})
+            for raw_unit_id in raw_unit_ids
+        }
     return {
         "atom_id": atom_id,
         "content_sha": source_content_sha(role, text),
@@ -609,11 +613,31 @@ def test_exact_census_crosswalk_classifies_every_raw_unit_once(tmp_path: Path) -
         census_path=census_path,
     )
     promotions = result["parity"]["promotions"]
+    mapped_content_hash = sha256_contract({"raw_unit_id": mapped_id})
 
     assert [row["raw_unit_id"] for row in promotions] == sorted(
         [mapped_id, unavailable_id, unsupported_id]
     )
     assert len(promotions[0]["event_ids"]) == 1
+    assert {row["raw_unit_id"]: row["raw_unit_content_hash"] for row in promotions} == {
+        mapped_id: mapped_content_hash,
+        unavailable_id: None,
+        unsupported_id: sha256_contract({"raw_unit_id": unsupported_id}),
+    }
+    assert result["parity"]["input_census"]["raw_units"] == [
+        {
+            "raw_unit_id": mapped_id,
+            "content_hash": mapped_content_hash,
+        },
+        {
+            "raw_unit_id": unavailable_id,
+            "content_hash": None,
+        },
+        {
+            "raw_unit_id": unsupported_id,
+            "content_hash": sha256_contract({"raw_unit_id": unsupported_id}),
+        },
+    ]
     dispositions = {
         row["raw_unit_id"]: row["disposition"]["type"] for row in promotions if "disposition" in row
     }
@@ -634,6 +658,10 @@ def test_exact_census_crosswalk_classifies_every_raw_unit_once(tmp_path: Path) -
     assert coverage["incomplete_predicates"] == [f"src_{unsupported_id.removeprefix('raw_')}"]
     event = read_jsonl(result["paths"]["normalized_events"])[0]
     assert event["format_adapter"] == "fixture-native"
+    assert event["raw_unit_content_hash"] == mapped_content_hash
+    envelope = read_jsonl(result["paths"]["source_envelopes"])[0]
+    assert envelope["raw_unit_id"] == mapped_id
+    assert envelope["raw_unit_content_hash"] == mapped_content_hash
 
 
 def test_event_identity_excludes_snapshot_and_transport_position(tmp_path: Path) -> None:
@@ -782,6 +810,51 @@ def test_census_tamper_and_snapshot_mismatch_fail_closed(tmp_path: Path) -> None
     with pytest.raises(ValueError, match="snapshot_id"):
         run_ingest(
             output_root=tmp_path / "mismatch",
+            atoms_path=atoms_path,
+            manifest_path=manifest,
+            census_path=census_path,
+        )
+
+
+def test_resealed_census_raw_content_hash_mismatch_fails_closed(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "providers.json"
+    atoms_path = tmp_path / "atoms.jsonl"
+    census_path = tmp_path / "census.json"
+    raw_id = "raw_" + "3" * 64
+    write_manifest(manifest, [provider("provider-a", "family-a")])
+    write_atoms(
+        atoms_path,
+        [
+            atom(
+                source="family-a",
+                role="user",
+                text="Immutable operator event.",
+                atom_id="native-event",
+                ordinal=0,
+                raw_unit_ids=[raw_id],
+                metadata={
+                    "native_identifiers": {"event_uuid": "native-event"},
+                    "native_identity_namespace": "fixture-native-v1",
+                },
+            )
+        ],
+    )
+    census = write_census(
+        census_path,
+        snapshot_id=SNAPSHOT_ID,
+        raw_units=[raw_unit(raw_id)],
+    )
+    census["raw_units"][0]["content_hash"] = "sha256:" + "9" * 64
+    census["census_digest"] = contract_digest(
+        {key: value for key, value in census.items() if key != "census_digest"}
+    )
+    census_path.write_text(json.dumps(census), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="content binding does not match census"):
+        run_ingest(
+            output_root=tmp_path / "resealed",
             atoms_path=atoms_path,
             manifest_path=manifest,
             census_path=census_path,

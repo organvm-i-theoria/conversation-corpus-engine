@@ -101,6 +101,7 @@ def build_projection_candidate(
     captured_at: str,
     snapshot_hash: str,
     custody_pointer: str,
+    raw_unit_content_hash: str,
 ) -> ProjectionCandidate:
     normalized_timestamp = normalize_timestamp(record.event_timestamp)
     normalized_captured_at = normalize_timestamp(captured_at)
@@ -164,6 +165,8 @@ def build_projection_candidate(
         "source_family": record.source_family,
         "source_instance": source_instance,
         "format_adapter": format_adapter,
+        "raw_unit_id": raw_unit_id,
+        "raw_unit_content_hash": raw_unit_content_hash,
         "custody_snapshot": {
             "snapshot_id": snapshot_id,
             "captured_at": normalized_captured_at,
@@ -193,6 +196,7 @@ def build_projection_candidate(
         "snapshot_id": snapshot_id,
         "snapshot_digest": snapshot_hash,
         "raw_unit_id": raw_unit_id,
+        "raw_unit_content_hash": raw_unit_content_hash,
         "source_family": record.source_family,
         "source_instance": source_instance,
         "format_adapter": format_adapter,

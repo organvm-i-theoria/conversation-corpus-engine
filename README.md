@@ -112,7 +112,11 @@ The bundled `provider-manifest.organvm.v1.json` is explicitly instance configura
 `CCE_PROVIDER_MANIFEST` or pass `--provider-manifest` to select another runtime manifest.
 Supplying `--source-census` binds normalization to session-meta's exact frozen denominator;
 the census is rejected on schema-shape, snapshot, or RFC 8785 digest mismatch. Contract digests
-use the pinned `rfc8785` dependency and exclude JSONL record delimiters.
+use the pinned `rfc8785` dependency and exclude JSONL record delimiters. Exact ingest also
+requires each atom's `meta.raw_unit_content_hashes` to match the census. That immutable
+raw-unit content identity is promoted into every source envelope and normalized event and
+repeated in the complete parity crosswalk; a changed-and-resealed census fails before
+projection.
 
 Each frozen run writes deterministic, body-free public projections:
 

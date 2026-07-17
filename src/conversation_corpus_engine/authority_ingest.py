@@ -281,6 +281,51 @@ def _load_source_census(path: Path, snapshot_id: str) -> dict[str, Any]:
     return census
 
 
+def _census_raw_unit_content_hashes(census: dict[str, Any]) -> dict[str, str | None]:
+    return {raw_unit["raw_unit_id"]: raw_unit["content_hash"] for raw_unit in census["raw_units"]}
+
+
+def _legacy_raw_unit_content_hash(record: RedactedSourceRecord) -> str:
+    if record.raw_unit_ids and record.raw_unit_content_hashes:
+        primary_raw_unit_id = record.raw_unit_ids[0]
+        content_hash = record.raw_unit_content_hashes.get(primary_raw_unit_id)
+        if isinstance(content_hash, str) and _is_digest(content_hash):
+            return content_hash
+    return contract_digest({"blob_shas": list(record.blob_shas)})
+
+
+def _bound_raw_unit_content_hash(
+    record: RedactedSourceRecord,
+    census_content_hashes: dict[str, str | None] | None,
+) -> str:
+    if census_content_hashes is None:
+        return _legacy_raw_unit_content_hash(record)
+    if not record.raw_unit_ids:
+        raise AuthorityIngestError(
+            "an exact source census requires every redacted atom to name its raw unit"
+        )
+    if set(record.raw_unit_content_hashes) != set(record.raw_unit_ids):
+        raise AuthorityIngestError(
+            "redacted atom raw-unit content bindings must exactly cover its raw unit ids"
+        )
+    for raw_unit_id in record.raw_unit_ids:
+        if raw_unit_id not in census_content_hashes:
+            raise AuthorityIngestError(
+                f"redacted atom references raw unit outside the exact census: {raw_unit_id}"
+            )
+        expected_content_hash = census_content_hashes[raw_unit_id]
+        actual_content_hash = record.raw_unit_content_hashes[raw_unit_id]
+        if not _is_digest(expected_content_hash):
+            raise AuthorityIngestError(
+                f"redacted atom references non-acquired census raw unit: {raw_unit_id}"
+            )
+        if actual_content_hash != expected_content_hash:
+            raise AuthorityIngestError(
+                f"redacted atom content binding does not match census raw unit: {raw_unit_id}"
+            )
+    return record.raw_unit_content_hashes[record.raw_unit_ids[0]]
+
+
 def _blocker_source(
     *,
     snapshot_id: str,
@@ -489,6 +534,10 @@ def _coverage_sources_from_parity(
     for raw_unit in census["raw_units"]:
         raw_unit_id = raw_unit["raw_unit_id"]
         promotion = promotions[raw_unit_id]
+        if promotion.get("raw_unit_content_hash") != raw_unit.get("content_hash"):
+            raise AuthorityIngestError(
+                f"parity promotion content binding does not match census raw unit: {raw_unit_id}"
+            )
         source_id = f"src_{raw_unit_id.removeprefix('raw_')}"
         evidence_references = sorted(
             set(raw_unit.get("evidence_references") or [f"raw-unit:{raw_unit_id}"])
@@ -551,12 +600,26 @@ def _normalization_parity_receipt(
     quarantines: list[str] = []
     missing: list[str] = []
     census_raw_unit_ids: list[str] = []
+    census_raw_units: list[dict[str, Any]] = []
     for raw_unit in sorted(census["raw_units"], key=lambda item: item["raw_unit_id"]):
         raw_unit_id = raw_unit["raw_unit_id"]
+        raw_unit_content_hash = raw_unit.get("content_hash")
         census_raw_unit_ids.append(raw_unit_id)
+        census_raw_units.append(
+            {
+                "raw_unit_id": raw_unit_id,
+                "content_hash": raw_unit_content_hash,
+            }
+        )
         event_ids = sorted(events_by_raw_unit.get(raw_unit_id, set()))
         if event_ids:
-            promotions.append({"raw_unit_id": raw_unit_id, "event_ids": event_ids})
+            promotions.append(
+                {
+                    "raw_unit_id": raw_unit_id,
+                    "raw_unit_content_hash": raw_unit_content_hash,
+                    "event_ids": event_ids,
+                }
+            )
             continue
 
         provider_id = aliases.get(raw_unit["source_family"])
@@ -585,6 +648,7 @@ def _normalization_parity_receipt(
         promotions.append(
             {
                 "raw_unit_id": raw_unit_id,
+                "raw_unit_content_hash": raw_unit_content_hash,
                 "disposition": {
                     "type": disposition_type,
                     "owner_reference": owner_reference or "repo:organvm/conversation-corpus-engine",
@@ -639,6 +703,7 @@ def _normalization_parity_receipt(
             "census_reference": "source-census.v1.json",
             "census_digest": census["census_digest"],
             "raw_unit_ids": census_raw_unit_ids,
+            "raw_units": census_raw_units,
         },
         "output_events": {
             "event_set_reference": "normalized-events.v1.jsonl",
@@ -673,6 +738,7 @@ def _legacy_census(
                     "source_instance": event["source_instance"],
                     "format_adapter": event["format_adapter"],
                     "acquisition_status": "acquired",
+                    "content_hash": event["raw_unit_content_hash"],
                     "evidence_references": [f"raw-unit:{raw_unit_id}"],
                 },
             )
@@ -690,6 +756,7 @@ def _legacy_census(
                 "source_instance": source["source_id"],
                 "format_adapter": "legacy-compatibility",
                 "acquisition_status": "blocked",
+                "content_hash": None,
                 "owner_reference": source.get("owner_reference", "owner:unresolved"),
                 "failed_predicate": source.get("failed_predicate", "legacy residual is normalized"),
                 "next_action": source.get(
@@ -709,6 +776,7 @@ def _legacy_census(
                 "source_instance": "legacy-empty",
                 "format_adapter": "legacy-compatibility",
                 "acquisition_status": "blocked",
+                "content_hash": None,
                 "owner_reference": "repo:organvm/conversation-corpus-engine",
                 "failed_predicate": "a source-census.v1 snapshot is supplied",
                 "next_action": "supply the exact session-meta census and rerun",
@@ -744,6 +812,7 @@ def ingest_authority_bundle(
         raise AuthorityIngestError("custody_pointer must be non-empty")
     normalize_timestamp(captured_at)
     census = _load_source_census(source_census, snapshot_id) if source_census else None
+    census_content_hashes = _census_raw_unit_content_hashes(census) if census is not None else None
     if census is not None and source_root is None:
         raise AuthorityIngestError("an exact source census requires its bound redacted source root")
     manifest = load_provider_manifest_snapshot(provider_manifest)
@@ -825,6 +894,7 @@ def ingest_authority_bundle(
                 continue
             seen_provider_ids.add(matched_provider_id)
             provider = catalog[matched_provider_id]
+            raw_unit_content_hash = _bound_raw_unit_content_hash(record, census_content_hashes)
             try:
                 candidate = build_projection_candidate(
                     record,
@@ -833,6 +903,7 @@ def ingest_authority_bundle(
                     captured_at=captured_at,
                     snapshot_hash=snapshot_hash,
                     custody_pointer=custody_pointer,
+                    raw_unit_content_hash=raw_unit_content_hash,
                 )
             except AuthorityProjectionError as exc:
                 diagnostic = _record_projection_diagnostic(record, str(exc))
