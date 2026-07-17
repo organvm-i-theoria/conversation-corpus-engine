@@ -134,6 +134,58 @@ adapter failures remain explicit parity quarantine debt even when valid siblings
 unit normalize. Existing export importers remain compatibility paths until a frozen run reports
 both exact parity and readiness.
 
+### Governance cadence parse/classify owners
+
+CCE exposes separate owner commands for Limen's bounded `parse` and `classify`
+stages. `authority-parse-cadence` performs the existing authority ingest exactly
+once. `authority-classify-cadence` does not reprocess the source: it independently
+checks the parse projection, copies the six governed artifacts byte-for-byte, and
+binds their digests in a typed classify projection.
+
+```bash
+cce provider authority-parse-cadence \
+  --source-root "$CCE_REDACTED_SNAPSHOT" \
+  --source-census "$CCE_SOURCE_CENSUS" \
+  --provider-manifest "$CCE_PROVIDER_MANIFEST" \
+  --output-root "$LIMEN_GOV_RUN_ROOT/parse" \
+  --snapshot-id "$LIMEN_GOV_SNAPSHOT_ID" \
+  --captured-at "$LIMEN_GOV_SNAPSHOT_AT" \
+  --custody-pointer "$CCE_CUSTODY_POINTER"
+
+cce provider authority-classify-cadence \
+  --input-root "$LIMEN_GOV_RUN_ROOT/parse" \
+  --output-root "$LIMEN_GOV_RUN_ROOT/classify" \
+  --snapshot-id "$LIMEN_GOV_SNAPSHOT_ID"
+```
+
+The commands consume Limen's injected `LIMEN_GOV_*` execution variables and
+write one bounded transaction child to `LIMEN_GOV_STAGE_METRICS_OUT`.
+`LIMEN_GOV_MAX_ITEMS` bounds the census raw-unit or promotion denominator.
+On proof traversals, they do not rerun ingest or rewrite outputs; they emit a
+`skipped_completed` child bound to the exact prior child receipt and report zero
+new events. The independent predicate commands are:
+
+```bash
+cce provider authority-parse-predicate \
+  --source-root "$CCE_REDACTED_SNAPSHOT" \
+  --source-census "$CCE_SOURCE_CENSUS" \
+  --provider-manifest "$CCE_PROVIDER_MANIFEST" \
+  --output-root "$LIMEN_GOV_RUN_ROOT/parse" \
+  --snapshot-id "$LIMEN_GOV_SNAPSHOT_ID" \
+  --captured-at "$LIMEN_GOV_SNAPSHOT_AT" \
+  --custody-pointer "$CCE_CUSTODY_POINTER"
+
+cce provider authority-classify-predicate \
+  --input-root "$LIMEN_GOV_RUN_ROOT/parse" \
+  --output-root "$LIMEN_GOV_RUN_ROOT/classify" \
+  --snapshot-id "$LIMEN_GOV_SNAPSHOT_ID" \
+  --captured-at "$LIMEN_GOV_SNAPSHOT_AT"
+```
+
+Both projections preserve the owner's distinction between classification and
+readiness: a complete parity crosswalk can remain `exact_all: true` while
+blockers or quarantines keep `ready: false`.
+
 ## MCP Tools
 
 `cce-mcp` serves MCP over stdio and never writes non-protocol output to stdout. It
@@ -159,6 +211,8 @@ currently exposes:
 - `src/conversation_corpus_engine/source_adapter_registry.py` — provider-neutral redacted-bundle adapter registry
 - `src/conversation_corpus_engine/authority_projection.py` — role-aware authority and lane projection
 - `src/conversation_corpus_engine/authority_ingest.py` — deterministic envelope, event, quarantine, coverage, and parity generation
+- `src/conversation_corpus_engine/authority_cadence.py` — bounded parse/classify owner projections and proof metrics
+- `src/conversation_corpus_engine/authority_cadence_predicate.py` — independent parse/classify predicates
 - `src/conversation_corpus_engine/provider_import.py` — provider import/onboarding orchestration
 - `src/conversation_corpus_engine/provider_refresh.py` — provider refresh orchestration over import, evaluation, and corpus promotion
 - `src/conversation_corpus_engine/provider_readiness.py` — provider lane readiness and report writing

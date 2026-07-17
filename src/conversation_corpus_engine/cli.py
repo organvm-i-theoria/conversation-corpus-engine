@@ -4,6 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
+from .authority_cadence import run_authority_classify_stage, run_authority_parse_stage
+from .authority_cadence_predicate import (
+    assert_classify_predicate,
+    assert_parse_predicate,
+)
 from .authority_ingest import ingest_authority_bundle
 from .chatgpt_local_session import (
     discover_chatgpt_projects,
@@ -259,6 +264,43 @@ def build_parser() -> argparse.ArgumentParser:
     provider_authority_ingest.add_argument("--snapshot-id", required=True)
     provider_authority_ingest.add_argument("--captured-at", required=True)
     provider_authority_ingest.add_argument("--custody-pointer", required=True)
+    provider_authority_parse = provider_sub.add_parser(
+        "authority-parse-cadence",
+        help="Run or prove the bounded parse projection for a frozen authority snapshot",
+    )
+    provider_authority_parse.add_argument("--source-root", type=Path, required=True)
+    provider_authority_parse.add_argument("--source-census", type=Path, required=True)
+    provider_authority_parse.add_argument("--provider-manifest", type=Path, required=True)
+    provider_authority_parse.add_argument("--output-root", type=Path, required=True)
+    provider_authority_parse.add_argument("--snapshot-id", required=True)
+    provider_authority_parse.add_argument("--captured-at", required=True)
+    provider_authority_parse.add_argument("--custody-pointer", required=True)
+    provider_authority_classify = provider_sub.add_parser(
+        "authority-classify-cadence",
+        help="Project the parse transaction into a byte-identical classify stage",
+    )
+    provider_authority_classify.add_argument("--input-root", type=Path, required=True)
+    provider_authority_classify.add_argument("--output-root", type=Path, required=True)
+    provider_authority_classify.add_argument("--snapshot-id", required=True)
+    provider_authority_parse_predicate = provider_sub.add_parser(
+        "authority-parse-predicate",
+        help="Independently verify the complete parse projection",
+    )
+    provider_authority_parse_predicate.add_argument("--source-root", type=Path, required=True)
+    provider_authority_parse_predicate.add_argument("--source-census", type=Path, required=True)
+    provider_authority_parse_predicate.add_argument("--provider-manifest", type=Path, required=True)
+    provider_authority_parse_predicate.add_argument("--output-root", type=Path, required=True)
+    provider_authority_parse_predicate.add_argument("--snapshot-id", required=True)
+    provider_authority_parse_predicate.add_argument("--captured-at", required=True)
+    provider_authority_parse_predicate.add_argument("--custody-pointer", required=True)
+    provider_authority_classify_predicate = provider_sub.add_parser(
+        "authority-classify-predicate",
+        help="Independently verify the classify projection and parse-byte parity",
+    )
+    provider_authority_classify_predicate.add_argument("--input-root", type=Path, required=True)
+    provider_authority_classify_predicate.add_argument("--output-root", type=Path, required=True)
+    provider_authority_classify_predicate.add_argument("--snapshot-id", required=True)
+    provider_authority_classify_predicate.add_argument("--captured-at", required=True)
 
     project = subparsers.add_parser("project", help="ChatGPT project extraction and lifecycle")
     project_sub = project.add_subparsers(dest="action", required=True)
@@ -820,6 +862,51 @@ def main() -> None:
             custody_pointer=args.custody_pointer,
         )
         print(json.dumps(payload, indent=2))
+        return
+
+    if args.group == "provider" and args.action == "authority-parse-cadence":
+        payload = run_authority_parse_stage(
+            source_root=args.source_root,
+            source_census=args.source_census,
+            provider_manifest=args.provider_manifest,
+            output_root=args.output_root,
+            snapshot_id=args.snapshot_id,
+            captured_at=args.captured_at,
+            custody_pointer=args.custody_pointer,
+        )
+        print(json.dumps(payload, indent=2))
+        return
+
+    if args.group == "provider" and args.action == "authority-classify-cadence":
+        payload = run_authority_classify_stage(
+            input_root=args.input_root,
+            output_root=args.output_root,
+            snapshot_id=args.snapshot_id,
+            captured_at=args.captured_at,
+        )
+        print(json.dumps(payload, indent=2))
+        return
+
+    if args.group == "provider" and args.action == "authority-parse-predicate":
+        assert_parse_predicate(
+            source_root=args.source_root,
+            source_census=args.source_census,
+            provider_manifest=args.provider_manifest,
+            output_root=args.output_root,
+            snapshot_id=args.snapshot_id,
+            captured_at=args.captured_at,
+            custody_pointer=args.custody_pointer,
+        )
+        print(json.dumps({"stage": "parse", "predicate": "passed"}, indent=2))
+        return
+
+    if args.group == "provider" and args.action == "authority-classify-predicate":
+        assert_classify_predicate(
+            input_root=args.input_root,
+            output_root=args.output_root,
+            snapshot_id=args.snapshot_id,
+        )
+        print(json.dumps({"stage": "classify", "predicate": "passed"}, indent=2))
         return
 
     if args.group == "project" and args.action == "extract":
