@@ -253,6 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Project a frozen session-meta redacted bundle into authority-aware contracts",
     )
     provider_authority_ingest.add_argument("--source-root", type=Path)
+    provider_authority_ingest.add_argument("--source-census", type=Path)
     provider_authority_ingest.add_argument("--provider-manifest", type=Path)
     provider_authority_ingest.add_argument("--output-root", type=Path, required=True)
     provider_authority_ingest.add_argument("--snapshot-id", required=True)
@@ -812,6 +813,7 @@ def main() -> None:
         payload = ingest_authority_bundle(
             output_root=args.output_root,
             source_root=args.source_root,
+            source_census=args.source_census,
             provider_manifest=args.provider_manifest,
             snapshot_id=args.snapshot_id,
             captured_at=args.captured_at,

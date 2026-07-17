@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -12,6 +15,7 @@ from .authority_projection import (
     body_hash,
     build_projection_candidate,
     canonical_bytes,
+    canonical_json_bytes,
     normalize_timestamp,
     sha256_contract,
 )
@@ -32,10 +36,199 @@ _COVERAGE_STATUSES = (
     "missing_expected",
     "owner_blocked",
 )
+DIGEST_ALGORITHM = "sha256-rfc8785-excluding-self-digest-v1"
+_DIGEST_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
+_SOURCE_CENSUS_FIELDS = {
+    "contract_name",
+    "contract_version",
+    "census_id",
+    "snapshot_id",
+    "snapshot_at",
+    "snapshot_digest",
+    "manifest_reference",
+    "manifest_digest",
+    "discovery_roots",
+    "seed_expectations",
+    "raw_units",
+    "digest_algorithm",
+    "census_digest",
+}
+_RAW_UNIT_REQUIRED_FIELDS = {
+    "raw_unit_id",
+    "discovery_root_id",
+    "source_family",
+    "source_instance",
+    "format_adapter",
+    "native_identifiers",
+    "acquisition_status",
+    "content_hash",
+    "custody_pointer",
+    "evidence_references",
+}
+_RAW_UNIT_FIELDS = _RAW_UNIT_REQUIRED_FIELDS | {
+    "legacy_source_id",
+    "expectation_id",
+    "owner_reference",
+    "failed_predicate",
+    "next_action",
+}
 
 
 class AuthorityIngestError(ValueError):
     """The authority-ingest run configuration is incomplete or contradictory."""
+
+
+def contract_digest(value: Any) -> str:
+    return f"sha256:{hashlib.sha256(canonical_json_bytes(value)).hexdigest()}"
+
+
+def _is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_digest(value: Any) -> bool:
+    return isinstance(value, str) and _DIGEST_PATTERN.fullmatch(value) is not None
+
+
+def _validate_source_census_contract(census: dict[str, Any]) -> None:
+    if set(census) != _SOURCE_CENSUS_FIELDS:
+        raise AuthorityIngestError("source census fields do not match source-census.v1")
+    if (
+        census.get("contract_name") != "source-census.v1"
+        or census.get("contract_version") != 1
+        or census.get("digest_algorithm") != DIGEST_ALGORITHM
+    ):
+        raise AuthorityIngestError("source census version or digest algorithm is invalid")
+    for field in ("census_id", "snapshot_id", "manifest_reference"):
+        if not _is_non_empty_string(census.get(field)):
+            raise AuthorityIngestError(f"source census {field} must be non-empty")
+    normalize_timestamp(str(census.get("snapshot_at", "")))
+    for field in ("snapshot_digest", "manifest_digest", "census_digest"):
+        if not _is_digest(census.get(field)):
+            raise AuthorityIngestError(f"source census {field} must be a SHA-256 digest")
+
+    discovery_roots = census.get("discovery_roots")
+    if not isinstance(discovery_roots, list) or not discovery_roots:
+        raise AuthorityIngestError("source census discovery_roots must be non-empty")
+    root_ids: set[str] = set()
+    root_values: set[str] = set()
+    for root in discovery_roots:
+        if not isinstance(root, dict) or set(root) != {
+            "root_id",
+            "root_kind",
+            "runtime_reference",
+            "config_reference",
+        }:
+            raise AuthorityIngestError("source census discovery root is invalid")
+        if root["root_kind"] not in {
+            "git_ref",
+            "workspace_root",
+            "custody_manifest",
+            "application_store",
+            "export",
+            "connector",
+        } or any(
+            not _is_non_empty_string(root[field])
+            for field in ("root_id", "runtime_reference", "config_reference")
+        ):
+            raise AuthorityIngestError("source census discovery root is invalid")
+        serialized = json.dumps(root, separators=(",", ":"), sort_keys=True)
+        if root["root_id"] in root_ids or serialized in root_values:
+            raise AuthorityIngestError("source census discovery roots must be unique")
+        root_ids.add(root["root_id"])
+        root_values.add(serialized)
+
+    expectations = census.get("seed_expectations")
+    if not isinstance(expectations, list):
+        raise AuthorityIngestError("source census seed_expectations must be a list")
+    expectation_ids: set[str] = set()
+    expectation_values: set[str] = set()
+    for expectation in expectations:
+        if not isinstance(expectation, dict) or set(expectation) != {
+            "expectation_id",
+            "source_family",
+            "config_reference",
+            "required",
+        }:
+            raise AuthorityIngestError("source census seed expectation is invalid")
+        if any(
+            not _is_non_empty_string(expectation[field])
+            for field in ("expectation_id", "source_family", "config_reference")
+        ) or not isinstance(expectation["required"], bool):
+            raise AuthorityIngestError("source census seed expectation is invalid")
+        serialized = json.dumps(expectation, separators=(",", ":"), sort_keys=True)
+        if expectation["expectation_id"] in expectation_ids or serialized in expectation_values:
+            raise AuthorityIngestError("source census seed expectations must be unique")
+        expectation_ids.add(expectation["expectation_id"])
+        expectation_values.add(serialized)
+
+    raw_units = census.get("raw_units")
+    if not isinstance(raw_units, list) or not raw_units:
+        raise AuthorityIngestError("source census raw_units must be non-empty")
+    raw_unit_ids: set[str] = set()
+    for raw_unit in raw_units:
+        if (
+            not isinstance(raw_unit, dict)
+            or not _RAW_UNIT_REQUIRED_FIELDS.issubset(raw_unit)
+            or not set(raw_unit).issubset(_RAW_UNIT_FIELDS)
+        ):
+            raise AuthorityIngestError("source census raw unit fields are invalid")
+        raw_unit_id = raw_unit["raw_unit_id"]
+        if (
+            not isinstance(raw_unit_id, str)
+            or not raw_unit_id.startswith("raw_")
+            or raw_unit_id in raw_unit_ids
+        ):
+            raise AuthorityIngestError("source census raw_unit_ids must be unique and canonical")
+        raw_unit_ids.add(raw_unit_id)
+        if raw_unit["discovery_root_id"] not in root_ids:
+            raise AuthorityIngestError("source census raw unit has an unknown discovery root")
+        expectation_id = raw_unit.get("expectation_id")
+        if expectation_id is not None and expectation_id not in expectation_ids:
+            raise AuthorityIngestError("source census raw unit has an unknown expectation")
+        for field in ("source_family", "source_instance", "format_adapter"):
+            if not _is_non_empty_string(raw_unit[field]):
+                raise AuthorityIngestError("source census raw unit identity is incomplete")
+        native_identifiers = raw_unit["native_identifiers"]
+        if (
+            not isinstance(native_identifiers, dict)
+            or not native_identifiers
+            or any(
+                not _is_non_empty_string(key) or not _is_non_empty_string(value)
+                for key, value in native_identifiers.items()
+            )
+        ):
+            raise AuthorityIngestError("source census native identifiers are invalid")
+        evidence = raw_unit["evidence_references"]
+        if (
+            not isinstance(evidence, list)
+            or not evidence
+            or len(evidence) != len(set(evidence))
+            or any(not _is_non_empty_string(reference) for reference in evidence)
+        ):
+            raise AuthorityIngestError("source census evidence references are invalid")
+        acquisition_status = raw_unit["acquisition_status"]
+        if acquisition_status not in {
+            "acquired",
+            "inaccessible",
+            "missing_expected",
+            "blocked",
+        }:
+            raise AuthorityIngestError("source census acquisition status is invalid")
+        if acquisition_status == "acquired":
+            if not _is_digest(raw_unit["content_hash"]) or not _is_non_empty_string(
+                raw_unit["custody_pointer"]
+            ):
+                raise AuthorityIngestError(
+                    "acquired source census units require content hash and custody"
+                )
+        elif any(
+            not _is_non_empty_string(raw_unit.get(field))
+            for field in ("owner_reference", "failed_predicate", "next_action")
+        ):
+            raise AuthorityIngestError(
+                "non-acquired source census units require an owner-routed blocker"
+            )
 
 
 def _residual_source_id(identity: dict[str, Any]) -> str:
@@ -53,7 +246,12 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     with temporary.open("wb") as handle:
-        for row in sorted(rows, key=lambda item: item["source_id"]):
+        for row in sorted(
+            rows,
+            key=lambda item: str(
+                item.get("source_id") or item.get("event_id") or item.get("raw_unit_id") or ""
+            ),
+        ):
             handle.write(canonical_bytes(row))
     temporary.replace(path)
 
@@ -64,6 +262,23 @@ def _source_alias_map(catalog: dict[str, dict[str, Any]]) -> dict[str, str]:
         for provider_id, provider in catalog.items()
         for alias in provider["source_family_aliases"]
     }
+
+
+def _load_source_census(path: Path, snapshot_id: str) -> dict[str, Any]:
+    try:
+        census = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AuthorityIngestError("source census is unreadable or malformed") from exc
+    if not isinstance(census, dict):
+        raise AuthorityIngestError("source census must satisfy source-census.v1")
+    _validate_source_census_contract(census)
+    if census.get("snapshot_id") != snapshot_id:
+        raise AuthorityIngestError("source census snapshot_id does not match the requested run")
+    census_digest = census["census_digest"]
+    unsigned = {key: value for key, value in census.items() if key != "census_digest"}
+    if contract_digest(unsigned) != census_digest:
+        raise AuthorityIngestError("source census digest does not match its canonical payload")
+    return census
 
 
 def _blocker_source(
@@ -211,6 +426,29 @@ def _coverage_receipt(
         for item in ordered_sources
         if item["status"] != "parsed"
     ]
+    unresolved_blockers = sorted(
+        item["source_id"]
+        for item in ordered_sources
+        if item["status"] in {"inaccessible", "owner_blocked"}
+    )
+    quarantines = sorted(
+        item["source_id"] for item in ordered_sources if item["status"] == "quarantined"
+    )
+    missing_requirements = sorted(
+        item["source_id"] for item in ordered_sources if item["status"] == "missing_expected"
+    )
+    incomplete_predicates = sorted(
+        item["source_id"] for item in ordered_sources if item["status"] == "acquired"
+    )
+    ready = (
+        exact_all
+        and count_payload["parsed"] == len(ordered_sources)
+        and not residual_owners
+        and not unresolved_blockers
+        and not quarantines
+        and not missing_requirements
+        and not incomplete_predicates
+    )
     receipt_id = _residual_source_id(
         {"snapshot_id": snapshot_id, "manifest_hash": manifest_hash, "kind": "coverage"}
     ).removeprefix("src_")
@@ -228,11 +466,266 @@ def _coverage_receipt(
         "sources": ordered_sources,
         "counts": count_payload,
         "exact_all": exact_all,
-        "ready": exact_all and count_payload["parsed"] == len(ordered_sources),
+        "ready": ready,
+        "unresolved_blockers": unresolved_blockers,
+        "quarantines": quarantines,
+        "missing_requirements": missing_requirements,
+        "citation_debt": [],
+        "incomplete_predicates": incomplete_predicates,
+        "closure_status": (
+            "ready" if ready else "closed_with_owner_routed_debt" if exact_all else "incomplete"
+        ),
         "residual_owners": residual_owners,
     }
     receipt["receipt_hash"] = sha256_contract(receipt)
     return receipt
+
+
+def _coverage_sources_from_parity(
+    census: dict[str, Any], parity: dict[str, Any]
+) -> list[dict[str, Any]]:
+    promotions = {promotion["raw_unit_id"]: promotion for promotion in parity["promotions"]}
+    sources: list[dict[str, Any]] = []
+    for raw_unit in census["raw_units"]:
+        raw_unit_id = raw_unit["raw_unit_id"]
+        promotion = promotions[raw_unit_id]
+        source_id = f"src_{raw_unit_id.removeprefix('raw_')}"
+        evidence_references = sorted(
+            set(raw_unit.get("evidence_references") or [f"raw-unit:{raw_unit_id}"])
+        )
+        if promotion.get("event_ids"):
+            sources.append(
+                {
+                    "source_id": source_id,
+                    "status": "parsed",
+                    "accessible": True,
+                    "evidence_references": evidence_references,
+                }
+            )
+            continue
+        disposition = promotion["disposition"]
+        acquisition_status = raw_unit["acquisition_status"]
+        if acquisition_status == "inaccessible":
+            status = "inaccessible"
+        elif acquisition_status == "missing_expected":
+            status = "missing_expected"
+        elif acquisition_status == "blocked":
+            status = "owner_blocked"
+        elif disposition["type"] == "quarantined":
+            status = "quarantined"
+        else:
+            status = "acquired"
+        sources.append(
+            {
+                "source_id": source_id,
+                "status": status,
+                "accessible": status in {"acquired", "parsed", "quarantined"},
+                "owner_reference": disposition["owner_reference"],
+                "failed_predicate": disposition["failed_predicate"],
+                "next_action": disposition["next_action"],
+                "evidence_references": evidence_references,
+            }
+        )
+    return sources
+
+
+def _normalization_parity_receipt(
+    *,
+    census: dict[str, Any],
+    candidates: list[ProjectionCandidate],
+    events: list[dict[str, Any]],
+    aliases: dict[str, str],
+    catalog: dict[str, dict[str, Any]],
+    captured_at: str,
+    diagnostic_blockers: list[str],
+    diagnostic_quarantines: list[str],
+) -> dict[str, Any]:
+    events_by_raw_unit: dict[str, set[str]] = defaultdict(set)
+    for candidate in candidates:
+        raw_unit_ids = candidate.record.raw_unit_ids or (candidate.event["raw_unit_id"],)
+        for raw_unit_id in raw_unit_ids:
+            events_by_raw_unit[raw_unit_id].add(candidate.event["event_id"])
+
+    promotions: list[dict[str, Any]] = []
+    blockers: list[str] = []
+    quarantines: list[str] = []
+    missing: list[str] = []
+    census_raw_unit_ids: list[str] = []
+    for raw_unit in sorted(census["raw_units"], key=lambda item: item["raw_unit_id"]):
+        raw_unit_id = raw_unit["raw_unit_id"]
+        census_raw_unit_ids.append(raw_unit_id)
+        event_ids = sorted(events_by_raw_unit.get(raw_unit_id, set()))
+        if event_ids:
+            promotions.append({"raw_unit_id": raw_unit_id, "event_ids": event_ids})
+            continue
+
+        provider_id = aliases.get(raw_unit["source_family"])
+        provider = catalog.get(provider_id) if provider_id else None
+        acquisition_status = raw_unit["acquisition_status"]
+        if acquisition_status != "acquired":
+            disposition_type = "blocked"
+            owner_reference = raw_unit.get("owner_reference")
+            failed_predicate = raw_unit.get("failed_predicate")
+            next_action = raw_unit.get("next_action")
+            blockers.append(raw_unit_id)
+            if acquisition_status == "missing_expected":
+                missing.append(raw_unit_id)
+        elif provider is None:
+            disposition_type = "unsupported"
+            owner_reference = "repo:organvm/conversation-corpus-engine"
+            failed_predicate = "source family has a configured normalization adapter"
+            next_action = "register the source family and adapter, then rerun the frozen snapshot"
+            blockers.append(raw_unit_id)
+        else:
+            disposition_type = "quarantined"
+            owner_reference = provider["blocker"]["owner_reference"]
+            failed_predicate = "registered adapter emits a valid normalized event"
+            next_action = "repair or re-export the source unit, then rerun the same snapshot"
+            quarantines.append(raw_unit_id)
+        promotions.append(
+            {
+                "raw_unit_id": raw_unit_id,
+                "disposition": {
+                    "type": disposition_type,
+                    "owner_reference": owner_reference or "repo:organvm/conversation-corpus-engine",
+                    "failed_predicate": failed_predicate
+                    or "raw source unit is available for normalization",
+                    "next_action": next_action
+                    or "restore the configured source and rerun the frozen snapshot",
+                    "evidence_references": sorted(
+                        set(raw_unit.get("evidence_references") or [f"raw-unit:{raw_unit_id}"])
+                    ),
+                },
+            }
+        )
+
+    event_ids = sorted(event["event_id"] for event in events)
+    promoted_event_ids = sorted(
+        {event_id for promotion in promotions for event_id in promotion.get("event_ids", [])}
+    )
+    exact_all = (
+        len(promotions) == len(census_raw_unit_ids)
+        and len({item["raw_unit_id"] for item in promotions}) == len(census_raw_unit_ids)
+        and promoted_event_ids == event_ids
+    )
+    blocker_debt = sorted(set(blockers + diagnostic_blockers))
+    quarantine_debt = sorted(set(quarantines + diagnostic_quarantines))
+    ready = exact_all and not blocker_debt and not quarantine_debt and not missing
+    readiness = {
+        "exact_all": exact_all,
+        "unresolved_blockers": blocker_debt,
+        "quarantines": quarantine_debt,
+        "missing_requirements": sorted(set(missing)),
+        "citation_debt": [],
+        "incomplete_predicates": [],
+        "ready": ready,
+        "status": ("ready" if ready else "blocked" if blocker_debt or missing else "incomplete"),
+    }
+    receipt_identity = {
+        "snapshot_id": census["snapshot_id"],
+        "census_digest": census["census_digest"],
+        "event_ids": event_ids,
+    }
+    receipt: dict[str, Any] = {
+        "contract_name": "normalization-parity-receipt.v1",
+        "contract_version": 1,
+        "receipt_id": "normalization-parity-"
+        f"{contract_digest(receipt_identity).removeprefix('sha256:')}",
+        "snapshot_id": census["snapshot_id"],
+        "snapshot_digest": census["snapshot_digest"],
+        "generated_at": normalize_timestamp(captured_at),
+        "input_census": {
+            "census_id": census["census_id"],
+            "census_reference": "source-census.v1.json",
+            "census_digest": census["census_digest"],
+            "raw_unit_ids": census_raw_unit_ids,
+        },
+        "output_events": {
+            "event_set_reference": "normalized-events.v1.jsonl",
+            "event_set_digest": contract_digest(events),
+            "event_ids": event_ids,
+        },
+        "promotions": promotions,
+        "readiness": readiness,
+        "digest_algorithm": DIGEST_ALGORITHM,
+    }
+    receipt["receipt_digest"] = contract_digest(receipt)
+    return receipt
+
+
+def _legacy_census(
+    *,
+    snapshot_id: str,
+    snapshot_digest: str,
+    captured_at: str,
+    candidates: list[ProjectionCandidate],
+    coverage_sources: list[dict[str, Any]],
+) -> dict[str, Any]:
+    raw_units_by_id: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        event = candidate.event
+        for raw_unit_id in candidate.record.raw_unit_ids or (event["raw_unit_id"],):
+            raw_units_by_id.setdefault(
+                raw_unit_id,
+                {
+                    "raw_unit_id": raw_unit_id,
+                    "source_family": event["source_family"],
+                    "source_instance": event["source_instance"],
+                    "format_adapter": event["format_adapter"],
+                    "acquisition_status": "acquired",
+                    "evidence_references": [f"raw-unit:{raw_unit_id}"],
+                },
+            )
+    for source in coverage_sources:
+        if source["status"] == "parsed":
+            continue
+        raw_unit_id = (
+            f"raw_{sha256_contract({'source_id': source['source_id']}).removeprefix('sha256:')}"
+        )
+        raw_units_by_id.setdefault(
+            raw_unit_id,
+            {
+                "raw_unit_id": raw_unit_id,
+                "source_family": "legacy-residual",
+                "source_instance": source["source_id"],
+                "format_adapter": "legacy-compatibility",
+                "acquisition_status": "blocked",
+                "owner_reference": source.get("owner_reference", "owner:unresolved"),
+                "failed_predicate": source.get("failed_predicate", "legacy residual is normalized"),
+                "next_action": source.get(
+                    "next_action", "supply a source-census.v1 snapshot and rerun"
+                ),
+                "evidence_references": source.get("evidence_references")
+                or [f"legacy-source:{source['source_id']}"],
+            },
+        )
+    raw_units = sorted(raw_units_by_id.values(), key=lambda item: item["raw_unit_id"])
+    if not raw_units:
+        raw_unit_id = f"raw_{sha256_contract({'snapshot_id': snapshot_id}).removeprefix('sha256:')}"
+        raw_units = [
+            {
+                "raw_unit_id": raw_unit_id,
+                "source_family": "legacy-empty",
+                "source_instance": "legacy-empty",
+                "format_adapter": "legacy-compatibility",
+                "acquisition_status": "blocked",
+                "owner_reference": "repo:organvm/conversation-corpus-engine",
+                "failed_predicate": "a source-census.v1 snapshot is supplied",
+                "next_action": "supply the exact session-meta census and rerun",
+                "evidence_references": [f"snapshot:{snapshot_id}"],
+            }
+        ]
+    census: dict[str, Any] = {
+        "contract_name": "source-census.v1",
+        "contract_version": 1,
+        "census_id": f"legacy-census-{snapshot_id}",
+        "snapshot_id": snapshot_id,
+        "snapshot_at": normalize_timestamp(captured_at),
+        "snapshot_digest": snapshot_digest,
+        "raw_units": raw_units,
+    }
+    census["census_digest"] = sha256_contract(census)
+    return census
 
 
 def ingest_authority_bundle(
@@ -242,6 +735,7 @@ def ingest_authority_bundle(
     captured_at: str,
     custody_pointer: str,
     source_root: Path | None = None,
+    source_census: Path | None = None,
     provider_manifest: Path | None = None,
 ) -> dict[str, Any]:
     if not snapshot_id.strip():
@@ -249,21 +743,27 @@ def ingest_authority_bundle(
     if not custody_pointer.strip():
         raise AuthorityIngestError("custody_pointer must be non-empty")
     normalize_timestamp(captured_at)
+    census = _load_source_census(source_census, snapshot_id) if source_census else None
+    if census is not None and source_root is None:
+        raise AuthorityIngestError("an exact source census requires its bound redacted source root")
     manifest = load_provider_manifest_snapshot(provider_manifest)
     catalog = manifest["providers"]
     aliases = _source_alias_map(catalog)
     manifest_hash = sha256_contract(manifest)
     runs, unresolved_provider_ids = _resolve_runs(catalog, source_root)
     read_results, read_failures = _read_runs(runs)
-    snapshot_hash = sha256_contract(
-        {"source_hashes": sorted({result.source_hash for result, _ in read_results})}
+    snapshot_hash = (
+        census["snapshot_digest"]
+        if census is not None
+        else sha256_contract(
+            {"source_hashes": sorted({result.source_hash for result, _ in read_results})}
+        )
     )
 
     candidates: list[ProjectionCandidate] = []
     coverage_sources: list[dict[str, Any]] = []
     quarantine_rows: list[dict[str, Any]] = []
     blocker_rows: list[dict[str, Any]] = []
-    duplicate_keys: Counter[tuple[str, ...]] = Counter()
 
     for provider_id in unresolved_provider_ids:
         provider = catalog[provider_id]
@@ -347,22 +847,15 @@ def ingest_authority_bundle(
             candidates.append(candidate)
             coverage_sources.append(
                 {
-                    "source_id": candidate.event["source_id"],
+                    "source_id": candidate.envelope["source_id"],
                     "status": "parsed",
                     "accessible": True,
                     "evidence_references": [record.input_reference],
                 }
             )
-            duplicate_keys[
-                (
-                    candidate.event["body_hash"],
-                    candidate.event["role"],
-                    candidate.event["kind"],
-                    candidate.event["source"],
-                    record.session_id,
-                )
-            ] += 1
-        for provider_id in set(expected_provider_ids) - seen_provider_ids:
+        for provider_id in (
+            set() if census is not None else set(expected_provider_ids) - seen_provider_ids
+        ):
             provider = catalog[provider_id]
             coverage = _blocker_source(
                 snapshot_id=snapshot_id,
@@ -378,44 +871,47 @@ def ingest_authority_bundle(
             blocker_rows.append({"snapshot_id": snapshot_id, **coverage})
 
     apply_reviewed_adoptions(candidates)
-    envelopes = [candidate.envelope for candidate in candidates]
-    events = [candidate.event for candidate in candidates]
+    candidates_by_event_id: dict[str, ProjectionCandidate] = {}
+    for candidate in candidates:
+        candidates_by_event_id.setdefault(candidate.event["event_id"], candidate)
+    unique_candidates = [
+        candidates_by_event_id[event_id] for event_id in sorted(candidates_by_event_id)
+    ]
+    envelopes = [candidate.envelope for candidate in unique_candidates]
+    events = [candidate.event for candidate in unique_candidates]
+    coverage_sources = list({source["source_id"]: source for source in coverage_sources}.values())
+    if census is None:
+        census = _legacy_census(
+            snapshot_id=snapshot_id,
+            snapshot_digest=snapshot_hash,
+            captured_at=captured_at,
+            candidates=unique_candidates,
+            coverage_sources=coverage_sources,
+        )
+    parity = _normalization_parity_receipt(
+        census=census,
+        candidates=unique_candidates,
+        events=events,
+        aliases=aliases,
+        catalog=catalog,
+        captured_at=captured_at,
+        diagnostic_blockers=[
+            row["source_id"] for row in blocker_rows if isinstance(row.get("source_id"), str)
+        ],
+        diagnostic_quarantines=[
+            row["source_id"] for row in quarantine_rows if isinstance(row.get("source_id"), str)
+        ],
+    )
     coverage = _coverage_receipt(
         snapshot_id=snapshot_id,
         captured_at=captured_at,
         manifest_hash=manifest_hash,
-        sources=coverage_sources,
+        sources=(
+            _coverage_sources_from_parity(census, parity)
+            if source_census is not None
+            else coverage_sources
+        ),
     )
-    event_by_id = {event["source_id"]: event for event in events}
-    envelope_by_id = {envelope["source_id"]: envelope for envelope in envelopes}
-    shared_source_ids = set(event_by_id) & set(envelope_by_id)
-    parity_exact = (
-        len(event_by_id) == len(events) == len(envelope_by_id) == len(envelopes)
-        and shared_source_ids == set(event_by_id) == set(envelope_by_id)
-        and all(
-            event_by_id[source_id]["body_hash"] == envelope_by_id[source_id]["body_hash"]
-            for source_id in shared_source_ids
-        )
-        and coverage["counts"]["parsed"] == len(events)
-    )
-    parity = {
-        "contract_name": "provider-authority-parity-receipt.v1",
-        "contract_version": 1,
-        "snapshot_id": snapshot_id,
-        "snapshot_hash": snapshot_hash,
-        "provider_manifest_hash": manifest_hash,
-        "counts": {
-            "source_envelopes": len(envelopes),
-            "normalized_events": len(events),
-            "quarantined": len(quarantine_rows),
-            "owner_blocked": len(blocker_rows),
-            "duplicate_transports": sum(count - 1 for count in duplicate_keys.values()),
-        },
-        "parity_exact": parity_exact,
-        "legacy_importers": "retained",
-        "retirement_allowed": parity_exact and coverage["ready"],
-    }
-    parity["receipt_hash"] = sha256_contract(parity)
 
     resolved_output = output_root.resolve()
     paths = {
@@ -424,7 +920,7 @@ def ingest_authority_bundle(
         "quarantine": resolved_output / "quarantine.jsonl",
         "owner_blockers": resolved_output / "owner-blockers.jsonl",
         "coverage_receipt": resolved_output / "coverage-receipt.v1.json",
-        "parity_receipt": resolved_output / "parity-receipt.v1.json",
+        "parity_receipt": resolved_output / "normalization-parity-receipt.v1.json",
     }
     _write_jsonl(paths["source_envelopes"], envelopes)
     _write_jsonl(paths["normalized_events"], events)
@@ -435,6 +931,7 @@ def ingest_authority_bundle(
     return {
         "snapshot_id": snapshot_id,
         "snapshot_hash": snapshot_hash,
+        "source_census_id": census["census_id"],
         "provider_manifest_hash": manifest_hash,
         "coverage": coverage,
         "parity": parity,

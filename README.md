@@ -69,7 +69,7 @@ cce corpus list --project-root /path/to/project
 cce corpus register /path/to/corpus --project-root /path/to/project --name "Notes Memory"
 cce federation build --project-root /path/to/project
 cce provider discover --project-root /path/to/project --source-drop-root /path/to/source-drop
-cce provider authority-ingest --source-root /path/to/redacted-bundle --provider-manifest /path/to/provider-manifest.json --output-root /path/to/output --snapshot-id frozen-snapshot --captured-at 2026-07-16T16:00:00Z --custody-pointer custody:frozen-snapshot
+cce provider authority-ingest --source-root /path/to/redacted-bundle --source-census /path/to/source-census.v1.json --provider-manifest /path/to/provider-manifest.json --output-root /path/to/output --snapshot-id frozen-snapshot --captured-at 2026-07-16T16:00:00Z --custody-pointer custody:frozen-snapshot
 cce provider import --provider chatgpt --source-drop-root /path/to/source-drop --register --build
 cce provider import --provider gemini --source-drop-root /path/to/source-drop --register --build
 cce provider bootstrap-eval --provider claude --project-root /path/to/project --full-eval
@@ -110,6 +110,9 @@ applies.
 The bundled `provider-manifest.organvm.v1.json` is explicitly instance configuration. The
 `provider-manifest.example.v1.json` reusable template contains only generic placeholders. Set
 `CCE_PROVIDER_MANIFEST` or pass `--provider-manifest` to select another runtime manifest.
+Supplying `--source-census` binds normalization to session-meta's exact frozen denominator;
+the census is rejected on schema-shape, snapshot, or RFC 8785 digest mismatch. Contract digests
+use the pinned `rfc8785` dependency and exclude JSONL record delimiters.
 
 Each frozen run writes deterministic, body-free public projections:
 
@@ -118,12 +121,14 @@ Each frozen run writes deterministic, body-free public projections:
 - `quarantine.jsonl`
 - `owner-blockers.jsonl`
 - `coverage-receipt.v1.json`
-- `parity-receipt.v1.json`
+- `normalization-parity-receipt.v1.json`
 
 Malformed rows quarantine without stopping valid siblings. Unknown families and missing roots
 remain explicit owner blockers. `exact_all` means every discovered unit was classified exactly
-once; `ready` additionally requires every unit to be parsed with no residual debt. Existing export
-importers remain compatibility paths until a frozen run reports both exact parity and readiness.
+once; `ready` additionally requires every unit to be parsed with no residual debt. Per-record
+adapter failures remain explicit parity quarantine debt even when valid siblings from the same raw
+unit normalize. Existing export importers remain compatibility paths until a frozen run reports
+both exact parity and readiness.
 
 ## MCP Tools
 

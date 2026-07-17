@@ -148,6 +148,7 @@ def test_main_provider_authority_ingest_passes_frozen_snapshot_contract(
     assert calls == {
         "output_root": output_root,
         "source_root": source_root,
+        "source_census": None,
         "provider_manifest": manifest,
         "snapshot_id": "snapshot-fixture",
         "captured_at": "2026-07-16T16:00:00Z",

@@ -28,6 +28,8 @@ class RedactedSourceRecord:
     event_timestamp: str
     content_sha: str
     blob_shas: tuple[str, ...]
+    raw_unit_ids: tuple[str, ...]
+    native_identifiers: dict[str, str]
     attachments: tuple[dict[str, str], ...]
     metadata: dict[str, Any]
 
@@ -214,6 +216,34 @@ def _parse_record(
     metadata = payload.get("meta", {})
     if not isinstance(metadata, dict):
         raise SourceBundleError("meta must be an object")
+    native_content_hash = metadata.get("native_content_hash")
+    if native_content_hash is not None and not (
+        isinstance(native_content_hash, str)
+        and native_content_hash.startswith("sha256:")
+        and _is_sha256(native_content_hash[7:])
+    ):
+        raise SourceBundleError("meta.native_content_hash must be a SHA-256 contract hash")
+    raw_unit_values = metadata.get("raw_unit_ids", [])
+    if not isinstance(raw_unit_values, list) or any(
+        not isinstance(value, str) or not value.startswith("raw_") for value in raw_unit_values
+    ):
+        raise SourceBundleError("meta.raw_unit_ids must contain canonical raw unit ids")
+    native_identifiers_value = metadata.get("native_identifiers", {})
+    if not isinstance(native_identifiers_value, dict) or any(
+        not isinstance(key, str)
+        or not key.strip()
+        or not isinstance(value, str)
+        or not value.strip()
+        for key, value in native_identifiers_value.items()
+    ):
+        raise SourceBundleError("meta.native_identifiers must be a string map")
+    native_identifiers = {
+        str(key): str(value) for key, value in native_identifiers_value.items()
+    } or {
+        "session_id": session_id,
+        "atom_id": atom_id.strip(),
+        "content_identity": content_sha,
+    }
     attachments = _attachments(payload, kind.strip())
     return RedactedSourceRecord(
         line_number=line_number,
@@ -228,6 +258,8 @@ def _parse_record(
         event_timestamp=event_timestamp,
         content_sha=content_sha,
         blob_shas=tuple(sorted(set(value.strip() for value in blob_shas))),
+        raw_unit_ids=tuple(sorted(set(raw_unit_values))),
+        native_identifiers=native_identifiers,
         attachments=attachments,
         metadata=metadata,
     )
