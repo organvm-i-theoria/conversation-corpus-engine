@@ -17,6 +17,7 @@ from conversation_corpus_engine.governance_replay import (
 from conversation_corpus_engine.import_markdown_document_corpus import (
     import_markdown_document_corpus,
 )
+from conversation_corpus_engine.provider_catalog import PROVIDER_CONFIG
 from conversation_corpus_engine.schema_validation import validate_json_file, validate_payload
 from conversation_corpus_engine.source_policy import set_source_policy
 from conversation_corpus_engine.surface_exports import (
@@ -168,7 +169,7 @@ class SurfaceExportsTests(unittest.TestCase):
                 Path(manifest["commercial_awareness"]["source_specs"][0]["path"]).exists()
             )
             self.assertEqual(context["summary"]["active_corpus_count"], 1)
-            self.assertEqual(context["summary"]["provider_count"], 8)
+            self.assertEqual(context["summary"]["provider_count"], len(PROVIDER_CONFIG))
             self.assertTrue(bundle["summary"]["valid"])
             self.assertTrue(manifest_result["valid"], manifest_result["errors"])
             self.assertTrue(context_result["valid"], context_result["errors"])
