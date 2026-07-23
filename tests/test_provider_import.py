@@ -10,7 +10,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine.corpus_store import CorpusStoreError, register_corpus_store
 from conversation_corpus_engine.federation import list_registered_corpora
-from conversation_corpus_engine.provider_import import import_provider_corpus
+from conversation_corpus_engine.perplexity_local_session import DEFAULT_PERPLEXITY_COOKIE_JAR
+from conversation_corpus_engine.provider_import import (
+    default_output_root,
+    import_provider_corpus,
+    resolve_provider_import_source,
+)
 from conversation_corpus_engine.provider_readiness import build_provider_readiness
 
 
@@ -93,6 +98,58 @@ class ProviderImportTests(unittest.TestCase):
             self.assertFalse(outside_destination.exists())
             self.assertEqual(registry_path.read_bytes(), registry_before)
             self.assertFalse((project_root / "reports").exists())
+
+
+class PerplexityLocalSessionResolutionTests(unittest.TestCase):
+    """Resolver + output-root wiring for perplexity local-session (no network)."""
+
+    def test_resolver_defaults_to_catalog_cookie_jar(self) -> None:
+        resolved, meta = resolve_provider_import_source(
+            provider="perplexity",
+            mode="local-session",
+            project_root=Path("/tmp/project"),
+        )
+        self.assertEqual(meta["resolution"], "local-session-cookie-jar")
+        self.assertEqual(resolved, DEFAULT_PERPLEXITY_COOKIE_JAR.resolve())
+
+    def test_resolver_maps_httpstorages_dir_to_cookie_jar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            http_storages = Path(tmpdir) / "HTTPStorages"
+            http_storages.mkdir()
+            resolved, meta = resolve_provider_import_source(
+                provider="perplexity",
+                mode="local-session",
+                project_root=Path("/tmp/project"),
+                local_root=http_storages,
+            )
+            self.assertEqual(meta["resolution"], "local-session-cookie-jar")
+            self.assertEqual(resolved.name, DEFAULT_PERPLEXITY_COOKIE_JAR.name)
+            self.assertEqual(resolved.parent, http_storages.resolve())
+
+    def test_resolver_accepts_explicit_cookie_jar_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            jar = Path(tmpdir) / "ai.perplexity.macv3.binarycookies"
+            jar.write_bytes(b"cook")
+            resolved, _meta = resolve_provider_import_source(
+                provider="perplexity",
+                mode="local-session",
+                project_root=Path("/tmp/project"),
+                local_root=jar,
+            )
+            self.assertEqual(resolved, jar.resolve())
+
+    def test_default_output_root_uses_default_corpus_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_drop_root = Path(tmpdir) / "drop"
+            source_drop_root.mkdir()
+            root = default_output_root(
+                provider="perplexity",
+                mode="local-session",
+                project_root=Path(tmpdir) / "project",
+                source_drop_root=source_drop_root,
+            )
+            # local-session uses default_corpus_id, not a fallback.
+            self.assertTrue(str(root).endswith("perplexity-history-memory"))
 
 
 if __name__ == "__main__":
