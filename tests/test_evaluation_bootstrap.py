@@ -13,6 +13,7 @@ from conversation_corpus_engine.evaluation_bootstrap import (
     bootstrap_claude_evaluation,
     bootstrap_provider_evaluation,
 )
+from conversation_corpus_engine.federation import upsert_corpus
 
 
 def seed_eval_target(root: Path, *, corpus_id: str, name: str, adapter_type: str) -> None:
@@ -115,6 +116,37 @@ def seed_eval_target(root: Path, *, corpus_id: str, name: str, adapter_type: str
 
 
 class EvaluationBootstrapTests(unittest.TestCase):
+    def test_bootstrap_provider_resolves_registered_store_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            target_root = corpus_store_root / "perplexity-history-memory"
+            seed_eval_target(
+                target_root,
+                corpus_id="perplexity-history-memory",
+                name="Perplexity History Memory",
+                adapter_type="perplexity-export",
+            )
+            register_corpus_store(project_root, corpus_store_root)
+            upsert_corpus(
+                project_root,
+                target_root,
+                corpus_id="perplexity-history-memory",
+                name="Perplexity History Memory",
+            )
+
+            payload = bootstrap_provider_evaluation(
+                project_root=project_root,
+                provider="perplexity",
+                corpus_store_root=corpus_store_root,
+            )
+
+            self.assertEqual(payload["resolution_source"], "primary")
+            self.assertEqual(payload["target_root"], str(target_root.resolve()))
+            self.assertTrue((target_root / "eval" / "manual-review-guide.md").exists())
+
     def test_bootstrap_explicit_target_writes_provider_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"

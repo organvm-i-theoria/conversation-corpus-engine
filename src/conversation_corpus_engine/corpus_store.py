@@ -6,7 +6,7 @@ import subprocess
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from .federation import REGISTRY_VERSION, load_registry, now_iso, registry_path, save_registry
 
@@ -168,7 +168,7 @@ def resolve_configured_corpus_store_root(
     return _resolve_existing_store_root(configured)
 
 
-def load_corpus_store_registration(project_root: Path) -> dict[str, str]:
+def load_corpus_store_registry(project_root: Path) -> dict[str, Any]:
     path = registry_path(project_root.resolve())
     if not path.is_file():
         raise CorpusStoreError(f"Corpus-store registry does not exist: {path}")
@@ -190,6 +190,15 @@ def load_corpus_store_registration(project_root: Path) -> dict[str, str]:
     registered_root = registration.get("root")
     if not isinstance(registered_root, str) or not Path(registered_root).is_absolute():
         raise CorpusStoreError(f"Corpus-store registration has an invalid root in: {path}")
+    return registry
+
+
+def load_corpus_store_registration(project_root: Path) -> dict[str, str]:
+    registration = load_corpus_store_registry(project_root).get("corpus_store")
+    if not isinstance(registration, dict):
+        raise CorpusStoreError(
+            f"Corpus-store root is not registered in: {registry_path(project_root.resolve())}"
+        )
     return registration
 
 

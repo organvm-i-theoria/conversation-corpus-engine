@@ -38,11 +38,16 @@ def write_markdown_sources(root: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8")
 
 
-def seed_surface_project(project_root: Path, source_drop_root: Path) -> None:
+def seed_surface_project(
+    project_root: Path,
+    source_drop_root: Path,
+    *,
+    corpus_store_root: Path | None = None,
+) -> None:
     workspace_root = project_root.parent
     live_source = workspace_root / "perplexity-live-source"
     candidate_source = workspace_root / "perplexity-candidate-source"
-    live_root = workspace_root / "perplexity-history-memory"
+    live_root = (corpus_store_root or workspace_root) / "perplexity-history-memory"
     candidate_root = workspace_root / "perplexity-history-memory-candidate"
 
     write_markdown_sources(
@@ -112,9 +117,13 @@ class SurfaceExportsTests(unittest.TestCase):
             workspace_root = Path(tmpdir)
             project_root = workspace_root / "project"
             source_drop_root = workspace_root / "source-drop"
-            seed_surface_project(project_root, source_drop_root)
             corpus_store_root = workspace_root / "private-corpus-store"
             corpus_store_root.mkdir()
+            seed_surface_project(
+                project_root,
+                source_drop_root,
+                corpus_store_root=corpus_store_root,
+            )
             register_corpus_store(project_root, corpus_store_root)
 
             manifest = build_surface_manifest(
@@ -176,6 +185,14 @@ class SurfaceExportsTests(unittest.TestCase):
             self.assertEqual(context["summary"]["provider_count"], 8)
             self.assertNotIn(str(corpus_store_root.resolve()), json.dumps(manifest))
             self.assertNotIn(str(corpus_store_root.resolve()), json.dumps(context))
+            self.assertEqual(
+                manifest["registry"]["corpora"][0]["root"],
+                "${CCE_CORPUS_STORE_ROOT}/perplexity-history-memory",
+            )
+            self.assertEqual(
+                context["registry"]["corpora"][0]["root"],
+                "${CCE_CORPUS_STORE_ROOT}/perplexity-history-memory",
+            )
             self.assertTrue(bundle["summary"]["valid"])
             self.assertTrue(manifest_result["valid"], manifest_result["errors"])
             self.assertTrue(context_result["valid"], context_result["errors"])

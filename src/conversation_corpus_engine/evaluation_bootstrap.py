@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from .answering import load_json, write_markdown
-from .corpus_store import CorpusWriteAuthorization, authorize_corpus_write
+from .corpus_store import (
+    CorpusWriteAuthorization,
+    authorize_corpus_write,
+    load_corpus_store_registry,
+    resolve_configured_corpus_store_root,
+)
 from .evaluation import run_corpus_evaluation, seed_gold
 from .paths import default_project_root
 from .provider_catalog import (
@@ -47,6 +52,7 @@ def resolve_target_root(
     provider: str | None,
     explicit_target_root: Path | None,
     policy_path: Path | None = None,
+    registry: list[dict[str, Any]] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     if explicit_target_root is not None:
         return explicit_target_root, {
@@ -72,7 +78,7 @@ def resolve_target_root(
             }
     source_drop_root = default_source_drop_root(resolved_project_root)
     targets = provider_corpus_targets(
-        resolved_project_root, provider, source_drop_root, registry=[]
+        resolved_project_root, provider, source_drop_root, registry=registry
     )
     target = next((item for item in targets if item.get("selected")), targets[0])
     return Path(target["root"]).resolve(), {
@@ -138,19 +144,26 @@ def bootstrap_provider_evaluation(
     authorization: CorpusWriteAuthorization | None = None,
 ) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
+    configured_store_root = (
+        authorization.store_root
+        if authorization is not None
+        else resolve_configured_corpus_store_root(corpus_store_root)
+    )
+    registry_entries = None
+    if target_root is None and provider is not None:
+        registry_entries = load_corpus_store_registry(resolved_project_root)["corpora"]
     resolved_target_root, resolution = resolve_target_root(
         project_root=resolved_project_root,
         provider=provider,
         explicit_target_root=target_root,
         policy_path=policy_path,
+        registry=registry_entries,
     )
     if not resolved_target_root.exists():
         raise FileNotFoundError(f"Target corpus root does not exist: {resolved_target_root}")
     resolved_authorization = authorize_corpus_write(
         project_root=resolved_project_root,
-        corpus_store_root=(
-            authorization.store_root if authorization is not None else corpus_store_root
-        ),
+        corpus_store_root=configured_store_root,
         destination=resolved_target_root,
     )
     resolved_target_root = resolved_authorization.destination

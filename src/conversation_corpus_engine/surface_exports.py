@@ -11,6 +11,7 @@ from .corpus_candidates import (
     corpus_live_pointer_path,
     corpus_promotion_latest_json_path,
 )
+from .corpus_store import CORPUS_STORE_ROOT_ENV
 from .federated_canon import load_federated_review_queue
 from .federation import (
     federation_report_path,
@@ -41,6 +42,7 @@ SURFACE_MANIFEST_CONTRACT = "conversation-corpus-engine-surface-manifest-v1"
 MCP_CONTEXT_CONTRACT = "conversation-corpus-engine-mcp-context-v1"
 SURFACE_BUNDLE_CONTRACT = "conversation-corpus-engine-surface-bundle-v1"
 SURFACE_CONTRACT_VERSION = 1
+CORPUS_STORE_ROOT_PLACEHOLDER = f"${{{CORPUS_STORE_ROOT_ENV}}}"
 
 CLI_SURFACES = [
     {
@@ -264,6 +266,28 @@ def surface_bundle_markdown_path(project_root: Path) -> Path:
 
 def optional_json(path: Path) -> Any:
     return load_json(path, default=None)
+
+
+def _redact_path_prefix(payload: Any, path_prefix: str) -> Any:
+    if isinstance(payload, str):
+        return payload.replace(path_prefix, CORPUS_STORE_ROOT_PLACEHOLDER)
+    if isinstance(payload, list):
+        return [_redact_path_prefix(item, path_prefix) for item in payload]
+    if isinstance(payload, dict):
+        return {key: _redact_path_prefix(value, path_prefix) for key, value in payload.items()}
+    return payload
+
+
+def redact_corpus_store_paths(payload: Any, registry: dict[str, Any]) -> Any:
+    registration = registry.get("corpus_store")
+    if (
+        not isinstance(registration, dict)
+        or registration.get("status") != "active"
+        or not isinstance(registration.get("root"), str)
+    ):
+        return payload
+    store_root = str(Path(registration["root"]).resolve())
+    return _redact_path_prefix(payload, store_root)
 
 
 def build_commercial_awareness_payload() -> dict[str, Any]:
@@ -558,7 +582,7 @@ def build_surface_manifest(
         resolved_source_drop_root,
     )
     registry = snapshot["registry"]
-    return {
+    payload = {
         "contract_name": SURFACE_MANIFEST_CONTRACT,
         "contract_version": SURFACE_CONTRACT_VERSION,
         "generated_at": now_iso(),
@@ -619,6 +643,7 @@ def build_surface_manifest(
         },
         "commercial_awareness": build_commercial_awareness_payload(),
     }
+    return redact_corpus_store_paths(payload, registry)
 
 
 def build_mcp_context_payload(
@@ -647,7 +672,7 @@ def build_mcp_context_payload(
     refresh_recommended_count = sum(
         1 for item in providers if "cce provider refresh" in (item.get("next_command") or "")
     )
-    return {
+    payload = {
         "contract_name": MCP_CONTEXT_CONTRACT,
         "contract_version": SURFACE_CONTRACT_VERSION,
         "generated_at": now_iso(),
@@ -700,6 +725,7 @@ def build_mcp_context_payload(
         "schema_catalog": list_schemas(),
         "commercial_awareness": build_commercial_awareness_payload(),
     }
+    return redact_corpus_store_paths(payload, snapshot["registry"])
 
 
 def write_surface_manifest_artifacts(
