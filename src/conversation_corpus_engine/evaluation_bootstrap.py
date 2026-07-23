@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -106,31 +107,48 @@ def corpus_metadata(target_root: Path) -> dict[str, Any]:
 
 def render_manual_guide(
     *,
-    provider_slug: str,
+    provider_slug: str | None,
     provider_name: str,
     target_root: Path,
+    project_root: Path,
+    corpus_store_root: Path,
     full_eval: bool,
 ) -> str:
-    rerun_command = f"cce evaluation run --root {target_root}"
-    refresh_command = f"cce provider bootstrap-eval --provider {provider_slug} --target-root {target_root} --full-eval"
-    return "\n".join(
-        [
-            f"# {provider_name} Manual Evaluation Guide",
-            "",
-            f"- Generated: {datetime.now(timezone.utc).isoformat()}",
-            f"- Target root: {target_root}",
-            f"- Full eval ran during bootstrap: {'yes' if full_eval else 'no'}",
-            "",
-            "## Next Manual Steps",
-            "",
-            "- Review `eval/gold/manual/detectors.json` and confirm or reject seeded detector truth.",
-            "- Review `eval/gold/manual/families.json` and confirm canonical family membership.",
-            "- Review `eval/fixtures/manual/retrieval.json` and replace seeded retrieval prompts with provider-specific cases.",
-            "- Review `eval/gold/manual/answers.json` and replace seeded answer fixtures with grounded expectations.",
-            f"- Re-run `{rerun_command}` after manual edits.",
-            f"- Use `{refresh_command}` only when you want the seeded baseline refreshed and re-scored.",
-        ],
+    quoted_target_root = shlex.quote(str(target_root))
+    quoted_project_root = shlex.quote(str(project_root))
+    quoted_store_root = shlex.quote(str(corpus_store_root))
+    rerun_command = (
+        f"cce evaluation run --root {quoted_target_root} "
+        f"--project-root {quoted_project_root} "
+        f"--corpus-store-root {quoted_store_root}"
     )
+    lines = [
+        f"# {provider_name} Manual Evaluation Guide",
+        "",
+        f"- Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"- Target root: {target_root}",
+        f"- Full eval ran during bootstrap: {'yes' if full_eval else 'no'}",
+        "",
+        "## Next Manual Steps",
+        "",
+        "- Review `eval/gold/manual/detectors.json` and confirm or reject seeded detector truth.",
+        "- Review `eval/gold/manual/families.json` and confirm canonical family membership.",
+        "- Review `eval/fixtures/manual/retrieval.json` and replace seeded retrieval prompts with provider-specific cases.",
+        "- Review `eval/gold/manual/answers.json` and replace seeded answer fixtures with grounded expectations.",
+        f"- Re-run `{rerun_command}` after manual edits.",
+    ]
+    if provider_slug is not None:
+        refresh_command = (
+            "cce provider bootstrap-eval "
+            f"--provider {shlex.quote(provider_slug)} "
+            f"--project-root {quoted_project_root} "
+            f"--target-root {quoted_target_root} "
+            f"--corpus-store-root {quoted_store_root} --full-eval"
+        )
+        lines.append(
+            f"- Use `{refresh_command}` only when you want the seeded baseline refreshed and re-scored."
+        )
+    return "\n".join(lines)
 
 
 def bootstrap_provider_evaluation(
@@ -192,9 +210,11 @@ def bootstrap_provider_evaluation(
     write_markdown(
         guidance_path,
         render_manual_guide(
-            provider_slug=provider or "external",
+            provider_slug=provider,
             provider_name=provider_name,
             target_root=resolved_target_root,
+            project_root=resolved_project_root,
+            corpus_store_root=resolved_authorization.store_root,
             full_eval=full_eval,
         ),
     )

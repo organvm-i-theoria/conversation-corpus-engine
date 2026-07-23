@@ -22,10 +22,13 @@ from conversation_corpus_engine.import_markdown_document_corpus import (
 from conversation_corpus_engine.schema_validation import validate_json_file, validate_payload
 from conversation_corpus_engine.source_policy import set_source_policy
 from conversation_corpus_engine.surface_exports import (
+    CORPUS_STORE_ROOT_PLACEHOLDER,
+    HISTORICAL_CORPUS_ROOT_PLACEHOLDER,
     build_mcp_context_payload,
     build_surface_manifest,
     export_surface_bundle,
     mcp_context_json_path,
+    redact_corpus_store_paths,
     surface_bundle_json_path,
     surface_manifest_json_path,
 )
@@ -112,6 +115,71 @@ def seed_surface_project(
 
 
 class SurfaceExportsTests(unittest.TestCase):
+    def test_redaction_is_boundary_aware_and_classifies_rotated_corpus_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_root = Path(tmpdir).resolve()
+            active_store = workspace_root / "active corpus store"
+            active_corpus = active_store / "perplexity history"
+            sibling_prefix = Path(f"{active_store}house") / "public"
+            rotated_corpus = workspace_root / "rotated corpus store" / "perplexity history"
+            unrelated_root = workspace_root / "unrelated root"
+            registry = {
+                "corpus_store": {
+                    "status": "active",
+                    "root": str(active_store),
+                },
+                "corpora": [],
+            }
+            payload = {
+                "registry": {
+                    "corpora": [
+                        {
+                            "corpus_id": "perplexity-history-memory",
+                            "root": str(rotated_corpus),
+                        }
+                    ]
+                },
+                "providers": [
+                    {
+                        "selected_targets": [{"root": str(active_corpus)}],
+                        "source_policy": {"primary_root": str(rotated_corpus)},
+                        "next_command": (
+                            "cce provider bootstrap-eval "
+                            f"--target-root='{active_corpus}' "
+                            f"--legacy-root={rotated_corpus}"
+                        ),
+                    }
+                ],
+                "unrelated": {
+                    "root": str(unrelated_root),
+                    "sibling": str(sibling_prefix),
+                },
+            }
+
+            redacted = redact_corpus_store_paths(payload, registry)
+            serialized = json.dumps(redacted)
+
+            self.assertEqual(
+                redacted["providers"][0]["selected_targets"][0]["root"],
+                f"{CORPUS_STORE_ROOT_PLACEHOLDER}/perplexity history",
+            )
+            self.assertIn(
+                f"--target-root='{CORPUS_STORE_ROOT_PLACEHOLDER}/perplexity history'",
+                redacted["providers"][0]["next_command"],
+            )
+            self.assertIn(
+                f"--legacy-root={HISTORICAL_CORPUS_ROOT_PLACEHOLDER}",
+                redacted["providers"][0]["next_command"],
+            )
+            self.assertEqual(
+                redacted["registry"]["corpora"][0]["root"],
+                HISTORICAL_CORPUS_ROOT_PLACEHOLDER,
+            )
+            self.assertEqual(redacted["unrelated"]["root"], str(unrelated_root))
+            self.assertEqual(redacted["unrelated"]["sibling"], str(sibling_prefix))
+            self.assertNotIn(str(active_corpus), serialized)
+            self.assertNotIn(str(rotated_corpus), serialized)
+
     def test_exported_surface_artifacts_validate_against_published_schemas(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace_root = Path(tmpdir)

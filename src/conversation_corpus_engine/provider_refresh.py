@@ -80,6 +80,10 @@ def default_refresh_candidate_root(corpus_store_root: Path, provider: str, run_i
     return corpus_store_root / "provider-refresh" / provider / run_id / "candidate-corpus"
 
 
+def default_refresh_receipt_root(corpus_store_root: Path, provider: str, run_id: str) -> Path:
+    return corpus_store_root / "provider-refresh" / provider / run_id
+
+
 def render_provider_refresh(payload: dict[str, Any]) -> str:
     evaluation = payload.get("evaluation") or {}
     candidate = payload.get("candidate") or {}
@@ -151,8 +155,15 @@ def refresh_provider_corpus(
         destination=resolved_candidate_root,
         live_roots=(Path(live_entry["root"]),),
     )
-    refresh_root = resolved_candidate_root.parent
-    authorize_additional_corpus_path(authorization, refresh_root)
+    refresh_root = default_refresh_receipt_root(authorization.store_root, provider, run_id)
+    resolved_refresh_root = authorize_additional_corpus_path(
+        authorization,
+        refresh_root,
+    ).destination
+    if resolved_refresh_root == resolved_candidate_root or resolved_refresh_root.is_relative_to(
+        resolved_candidate_root
+    ):
+        raise ValueError("Refresh receipts must be written outside the candidate corpus.")
 
     import_result = import_provider_corpus(
         project_root=resolved_project_root,
@@ -231,9 +242,11 @@ def refresh_provider_corpus(
         "candidate": latest_candidate_manifest,
         "review": review_result,
         "promotion": promotion_result,
+        "refresh_json_path": str(resolved_refresh_root / "refresh.json"),
+        "refresh_markdown_path": str(resolved_refresh_root / "refresh.md"),
     }
-    write_json(refresh_root / "refresh.json", payload)
-    write_markdown(refresh_root / "refresh.md", render_provider_refresh(payload))
+    write_json(resolved_refresh_root / "refresh.json", payload)
+    write_markdown(resolved_refresh_root / "refresh.md", render_provider_refresh(payload))
     write_json(provider_refresh_latest_json_path(resolved_project_root, provider), payload)
     write_markdown(
         provider_refresh_latest_markdown_path(resolved_project_root, provider),
@@ -253,6 +266,4 @@ def refresh_provider_corpus(
             "promotion": bool(promotion_result),
         },
     )
-    payload["refresh_json_path"] = str(refresh_root / "refresh.json")
-    payload["refresh_markdown_path"] = str(refresh_root / "refresh.md")
     return payload

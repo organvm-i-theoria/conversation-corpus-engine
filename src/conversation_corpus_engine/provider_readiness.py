@@ -101,6 +101,23 @@ def corpus_writer_command(
     return f"{command} --corpus-store-root {shlex.quote(str(corpus_store_root.resolve()))}"
 
 
+def target_is_store_backed(target: dict[str, Any], corpus_store_root: Path | None) -> bool:
+    if corpus_store_root is None:
+        return False
+    return Path(target["root"]).resolve().is_relative_to(corpus_store_root.resolve())
+
+
+def legacy_target_guidance(
+    target: dict[str, Any],
+    corpus_store_root: Path,
+) -> str:
+    destination = corpus_store_root.resolve() / target["corpus_id"]
+    return (
+        f"Migrate or re-import {target['corpus_id']} into the active corpus store "
+        f"at {destination} before writing evaluation assets."
+    )
+
+
 def determine_next_command(
     provider: str,
     discovery: dict[str, Any],
@@ -122,6 +139,18 @@ def determine_next_command(
                 corpus_store_root=corpus_store_root,
             )
         return f"Place a supported {config['display_name']} export in {discovery['inbox_root']}"
+    if (
+        state
+        in {
+            "missing-contract",
+            "imported-needs-bootstrap",
+            "manual-eval-pending",
+            "manual-eval-unrun",
+        }
+        and corpus_store_root is not None
+        and not target_is_store_backed(selected_target, corpus_store_root)
+    ):
+        return legacy_target_guidance(selected_target, corpus_store_root)
     if state == "missing-contract":
         return f"Create corpus contract and index files under {selected_target['root']}/corpus"
     if state == "imported-needs-bootstrap":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -126,6 +127,100 @@ class ProviderReadinessTests(unittest.TestCase):
                     f"--project-root {project_root.resolve()} "
                     "--root /path/to/private-corpus-store"
                 ),
+            )
+
+    def test_legacy_out_of_store_bootstrap_target_emits_migration_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            source_drop_root = Path(tmpdir) / "source-drop"
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            legacy_root = Path(tmpdir) / "perplexity-history-memory"
+            seed_valid_corpus(legacy_root)
+            (legacy_root / "eval" / "manual-review-guide.md").unlink()
+            upsert_corpus(
+                project_root,
+                legacy_root,
+                corpus_id="perplexity-history-memory",
+                name="Perplexity History Memory",
+            )
+            register_corpus_store(project_root, corpus_store_root)
+
+            payload = build_provider_readiness(project_root, source_drop_root)
+            readiness = next(
+                item for item in payload["providers"] if item["provider"] == "perplexity"
+            )
+
+            self.assertEqual(readiness["overall_state"], "imported-needs-bootstrap")
+            self.assertIn("Migrate or re-import", readiness["next_command"])
+            self.assertIn(str(corpus_store_root.resolve()), readiness["next_command"])
+            self.assertNotIn("cce provider bootstrap-eval", readiness["next_command"])
+
+    def test_missing_target_import_remains_store_backed_and_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project with spaces"
+            project_root.mkdir()
+            source_drop_root = Path(tmpdir) / "source drop"
+            inbox = source_drop_root / "perplexity" / "inbox"
+            inbox.mkdir(parents=True)
+            (inbox / "export.md").write_text("# export\n", encoding="utf-8")
+            corpus_store_root = Path(tmpdir) / "corpus store"
+            corpus_store_root.mkdir()
+            register_corpus_store(project_root, corpus_store_root)
+
+            payload = build_provider_readiness(project_root, source_drop_root)
+            readiness = next(
+                item for item in payload["providers"] if item["provider"] == "perplexity"
+            )
+            command = shlex.split(readiness["next_command"])
+
+            self.assertEqual(readiness["overall_state"], "missing")
+            self.assertEqual(command[:4], ["cce", "provider", "import", "--provider"])
+            self.assertEqual(
+                command[command.index("--project-root") + 1],
+                str(project_root.resolve()),
+            )
+            self.assertEqual(
+                command[command.index("--source-drop-root") + 1],
+                str(source_drop_root.resolve()),
+            )
+            self.assertEqual(
+                command[command.index("--corpus-store-root") + 1],
+                str(corpus_store_root.resolve()),
+            )
+
+    def test_healthy_legacy_target_refresh_remains_store_backed_and_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            source_drop_root = Path(tmpdir) / "source-drop"
+            inbox = source_drop_root / "perplexity" / "inbox"
+            inbox.mkdir(parents=True)
+            (inbox / "export.md").write_text("# export\n", encoding="utf-8")
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            legacy_root = Path(tmpdir) / "perplexity-history-memory"
+            seed_valid_corpus(legacy_root)
+            upsert_corpus(
+                project_root,
+                legacy_root,
+                corpus_id="perplexity-history-memory",
+                name="Perplexity History Memory",
+            )
+            register_corpus_store(project_root, corpus_store_root)
+
+            payload = build_provider_readiness(project_root, source_drop_root)
+            readiness = next(
+                item for item in payload["providers"] if item["provider"] == "perplexity"
+            )
+            command = shlex.split(readiness["next_command"])
+
+            self.assertEqual(readiness["overall_state"], "healthy-federation")
+            self.assertEqual(command[:4], ["cce", "provider", "refresh", "--provider"])
+            self.assertEqual(
+                command[command.index("--corpus-store-root") + 1],
+                str(corpus_store_root.resolve()),
             )
 
     def test_build_provider_readiness_prefers_registered_chatgpt_fallback_when_default_missing(

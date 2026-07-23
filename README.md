@@ -98,7 +98,8 @@ cce source freshness /path/to/corpus
 cce-mcp --project-root /path/to/project
 ```
 
-Corpus-destination writers fail closed unless a store has first been registered. The
+Corpus-destination writers fail closed unless a store has first been registered and the
+configured root exactly matches that active registration. The
 `--corpus-store-root` option takes precedence over `CCE_CORPUS_STORE_ROOT`; there is no
 implicit fallback. A store must already exist, must not traverse symlinks or contain nested
 Git repositories, and must either live outside Git or be wholly ignored and untracked.

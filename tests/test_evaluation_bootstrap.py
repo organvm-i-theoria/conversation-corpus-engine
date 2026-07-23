@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import sys
 import tempfile
 import unittest
@@ -116,6 +118,85 @@ def seed_eval_target(root: Path, *, corpus_id: str, name: str, adapter_type: str
 
 
 class EvaluationBootstrapTests(unittest.TestCase):
+    def test_manual_guide_commands_quote_authorized_project_and_store_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_root = Path(tmpdir)
+            project_root = workspace_root / "project with spaces"
+            project_root.mkdir()
+            corpus_store_root = workspace_root / "corpus store"
+            corpus_store_root.mkdir()
+            target_root = corpus_store_root / "gemini history memory"
+            seed_eval_target(
+                target_root,
+                corpus_id="gemini-history-memory",
+                name="Gemini History Memory",
+                adapter_type="gemini-export",
+            )
+            register_corpus_store(project_root, corpus_store_root)
+
+            payload = bootstrap_provider_evaluation(
+                project_root=project_root,
+                provider="gemini",
+                target_root=target_root,
+                corpus_store_root=corpus_store_root,
+            )
+
+            guide = Path(payload["manual_guide_path"]).read_text(encoding="utf-8")
+            commands = re.findall(r"`(cce [^`]+)`", guide)
+            parsed_commands = [shlex.split(command) for command in commands]
+
+            self.assertEqual(len(parsed_commands), 2)
+            for parsed in parsed_commands:
+                self.assertEqual(
+                    parsed[parsed.index("--project-root") + 1],
+                    str(project_root.resolve()),
+                )
+                self.assertEqual(
+                    parsed[parsed.index("--corpus-store-root") + 1],
+                    str(corpus_store_root.resolve()),
+                )
+            self.assertEqual(
+                parsed_commands[0][parsed_commands[0].index("--root") + 1],
+                str(target_root.resolve()),
+            )
+            self.assertEqual(
+                parsed_commands[1][parsed_commands[1].index("--target-root") + 1],
+                str(target_root.resolve()),
+            )
+            self.assertEqual(
+                parsed_commands[1][parsed_commands[1].index("--provider") + 1],
+                "gemini",
+            )
+
+    def test_manual_guide_omits_provider_bootstrap_without_real_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            target_root = corpus_store_root / "external-memory"
+            seed_eval_target(
+                target_root,
+                corpus_id="external-memory",
+                name="External Memory",
+                adapter_type="external-export",
+            )
+            register_corpus_store(project_root, corpus_store_root)
+
+            payload = bootstrap_provider_evaluation(
+                project_root=project_root,
+                provider=None,
+                target_root=target_root,
+                corpus_store_root=corpus_store_root,
+            )
+
+            guide = Path(payload["manual_guide_path"]).read_text(encoding="utf-8")
+            commands = re.findall(r"`(cce [^`]+)`", guide)
+
+            self.assertEqual(len(commands), 1)
+            self.assertTrue(commands[0].startswith("cce evaluation run "))
+            self.assertNotIn("provider bootstrap-eval", guide)
+
     def test_bootstrap_provider_resolves_registered_store_target(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"
