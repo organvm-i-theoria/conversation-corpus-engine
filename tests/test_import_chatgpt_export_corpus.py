@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from conversation_corpus_engine.corpus_store import register_corpus_store  # noqa: E402
 from conversation_corpus_engine.import_chatgpt_export_corpus import (  # noqa: E402
     import_chatgpt_export_corpus,
 )
@@ -123,13 +124,18 @@ class ChatGPTProviderIntegrationTests(unittest.TestCase):
     def test_import_provider_corpus_routes_chatgpt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            register_corpus_store(project_root, corpus_store_root)
             source_path = FIXTURE_ROOT
-            output_root = Path(tmpdir) / "chatgpt-history-memory"
+            output_root = corpus_store_root / "chatgpt-history-memory"
             result = import_provider_corpus(
                 project_root=project_root,
                 provider="chatgpt",
                 source_path=source_path,
                 output_root=output_root,
+                corpus_store_root=corpus_store_root,
                 bootstrap_eval=False,
             )
             self.assertEqual(result["provider"], "chatgpt")

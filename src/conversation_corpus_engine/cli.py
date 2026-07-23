@@ -22,6 +22,7 @@ from .corpus_candidates import (
     rollback_corpus_promotion,
     stage_corpus_candidate,
 )
+from .corpus_store import register_corpus_store
 from .dashboard import build_dashboard, render_dashboard_text
 from .evaluation import run_corpus_evaluation
 from .evaluation_bootstrap import bootstrap_provider_evaluation
@@ -140,6 +141,14 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_register.add_argument("--name")
     corpus_register.add_argument("--default", action="store_true")
 
+    corpus_store = subparsers.add_parser("corpus-store", help="Manage private corpus custody")
+    corpus_store_sub = corpus_store.add_subparsers(dest="action", required=True)
+    corpus_store_register = corpus_store_sub.add_parser(
+        "register", help="Register the active private corpus-store root"
+    )
+    corpus_store_register.add_argument("--root", type=Path, required=True)
+    corpus_store_register.add_argument("--project-root", type=Path, default=default_project_root())
+
     corpus_extract = corpus_sub.add_parser("persona-extract", help="Extract persona lexicons")
     corpus_extract.add_argument("--persona", required=True, help="Persona ID (e.g. rob, claude)")
     corpus_extract.add_argument("--source-corpus", type=Path, help="Path to session transcripts")
@@ -207,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     provider_import.add_argument("--source-path", type=Path)
     provider_import.add_argument("--local-root", type=Path)
     provider_import.add_argument("--output-root", type=Path)
+    provider_import.add_argument("--corpus-store-root", type=Path)
     provider_import.add_argument("--corpus-id")
     provider_import.add_argument("--name")
     provider_import.add_argument("--register", action="store_true")
@@ -232,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_bootstrap.add_argument("--project-root", type=Path, default=default_project_root())
     provider_bootstrap.add_argument("--target-root", type=Path)
+    provider_bootstrap.add_argument("--corpus-store-root", type=Path)
     provider_bootstrap.add_argument("--policy-path", type=Path)
     provider_bootstrap.add_argument("--full-eval", action="store_true")
     provider_bootstrap.add_argument("--json", action="store_true")
@@ -259,6 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     provider_refresh.add_argument("--local-root", type=Path)
     provider_refresh.add_argument("--live-corpus-id")
     provider_refresh.add_argument("--candidate-root", type=Path)
+    provider_refresh.add_argument("--corpus-store-root", type=Path)
     provider_refresh.add_argument("--no-bootstrap-eval", action="store_true")
     provider_refresh.add_argument("--no-eval", action="store_true")
     provider_refresh.add_argument("--approve", action="store_true")
@@ -474,6 +486,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation_sub = evaluation.add_subparsers(dest="action", required=True)
     evaluation_run = evaluation_sub.add_parser("run", help="Run evaluation for a corpus root")
     evaluation_run.add_argument("--root", type=Path, required=True)
+    evaluation_run.add_argument("--project-root", type=Path, default=default_project_root())
+    evaluation_run.add_argument("--corpus-store-root", type=Path)
     evaluation_run.add_argument("--seed", action="store_true")
     evaluation_run.add_argument("--markdown-output", type=Path)
     evaluation_run.add_argument("--json-output", type=Path)
@@ -749,6 +763,11 @@ def main() -> None:
         print(json.dumps(entry, indent=2))
         return
 
+    if args.group == "corpus-store" and args.action == "register":
+        registration = register_corpus_store(args.project_root, args.root)
+        print(json.dumps(registration, indent=2))
+        return
+
     if args.group == "federation" and args.action == "build":
         result = build_federation(args.project_root)
         print(json.dumps(result, indent=2))
@@ -809,6 +828,7 @@ def main() -> None:
             source_path=args.source_path,
             local_root=args.local_root,
             output_root=args.output_root,
+            corpus_store_root=args.corpus_store_root,
             corpus_id=args.corpus_id,
             name=args.name,
             register=args.register,
@@ -825,6 +845,7 @@ def main() -> None:
             target_root=args.target_root,
             policy_path=args.policy_path,
             full_eval=args.full_eval,
+            corpus_store_root=args.corpus_store_root,
         )
         print(json.dumps(payload, indent=2))
         return
@@ -839,6 +860,7 @@ def main() -> None:
             local_root=args.local_root,
             live_corpus_id=args.live_corpus_id,
             candidate_root=args.candidate_root,
+            corpus_store_root=args.corpus_store_root,
             bootstrap_eval=not args.no_bootstrap_eval,
             run_eval=not args.no_eval,
             approve=args.approve or args.promote,
@@ -1110,6 +1132,8 @@ def main() -> None:
             seed=args.seed,
             markdown_output=args.markdown_output,
             json_output=args.json_output,
+            project_root=args.project_root,
+            corpus_store_root=args.corpus_store_root,
         )
         payload = {
             "root": str(args.root.resolve()),

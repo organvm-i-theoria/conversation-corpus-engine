@@ -66,16 +66,17 @@ MIT
 ```bash
 cce corpus list --project-root /path/to/project
 cce corpus register /path/to/corpus --project-root /path/to/project --name "Notes Memory"
+cce corpus-store register --project-root /path/to/project --root /path/to/private-corpus-store
 cce federation build --project-root /path/to/project
 cce provider discover --project-root /path/to/project --source-drop-root /path/to/source-drop
-cce provider import --provider chatgpt --source-drop-root /path/to/source-drop --register --build
-cce provider import --provider gemini --source-drop-root /path/to/source-drop --register --build
-cce provider import --provider claude --mode local-session --local-root "/Users/you/Library/Application Support/Claude"
-cce provider bootstrap-eval --provider claude --project-root /path/to/project --full-eval
+cce provider import --provider chatgpt --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-drop-root /path/to/source-drop --register --build
+cce provider import --provider gemini --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-drop-root /path/to/source-drop --register --build
+cce provider import --provider claude --mode local-session --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --local-root "/Users/you/Library/Application Support/Claude"
+cce provider bootstrap-eval --provider claude --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --full-eval
 cce provider readiness --project-root /path/to/project --source-drop-root /path/to/source-drop --write
-cce provider refresh --provider chatgpt --project-root /path/to/project --source-drop-root /path/to/source-drop
-cce provider refresh --provider perplexity --project-root /path/to/project --source-drop-root /path/to/source-drop
-cce provider refresh --provider claude --project-root /path/to/project --promote --note "refresh and replace live corpus"
+cce provider refresh --provider chatgpt --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-drop-root /path/to/source-drop
+cce provider refresh --provider perplexity --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-drop-root /path/to/source-drop
+cce provider refresh --provider claude --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --promote --note "refresh and replace live corpus"
 cce schema list
 cce schema show corpus-contract
 cce schema validate corpus-contract --path /path/to/corpus/contract.json
@@ -90,12 +91,20 @@ cce candidate stage --project-root /path/to/project --candidate-root /path/to/ca
 cce candidate review --project-root /path/to/project --candidate-id latest --decision approve --note "promote candidate"
 cce candidate promote --project-root /path/to/project --candidate-id latest --note "replace live corpus"
 cce candidate rollback --project-root /path/to/project --target previous --note "restore previous live corpus"
-cce evaluation run --root /path/to/corpus --seed --json
+cce evaluation run --root /path/to/corpus --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --seed --json
 cce review queue --project-root /path/to/project
 cce review resolve federated-family-merge-... --decision accepted --note "same family"
 cce source freshness /path/to/corpus
 cce-mcp --project-root /path/to/project
 ```
+
+Corpus-destination writers fail closed unless a store has first been registered and the
+configured root exactly matches that active registration. The
+`--corpus-store-root` option takes precedence over `CCE_CORPUS_STORE_ROOT`; there is no
+implicit fallback. A store must already exist, must not traverse symlinks or contain nested
+Git repositories, and must either live outside Git or be wholly ignored and untracked.
+Provider imports default to `<store>/<corpus-id>`, while refresh candidates default to
+`<store>/provider-refresh/<provider>/<run-id>/candidate-corpus`.
 
 ## MCP Tools
 
@@ -113,6 +122,7 @@ currently exposes:
 - `src/conversation_corpus_engine/source_lifecycle.py` — source snapshot and freshness checks
 - `src/conversation_corpus_engine/federated_canon.py` — federated review state and canon builders
 - `src/conversation_corpus_engine/federation.py` — corpus registry and federation build/query logic
+- `src/conversation_corpus_engine/corpus_store.py` — private corpus-store registration and write authorization
 - `src/conversation_corpus_engine/import_markdown_document_corpus.py` — generic markdown corpus materialization
 - `src/conversation_corpus_engine/import_document_export_corpus.py` — document-style provider export import
 - `src/conversation_corpus_engine/import_claude_export_corpus.py` — Claude bundle import
