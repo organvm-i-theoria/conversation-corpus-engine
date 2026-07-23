@@ -322,8 +322,14 @@ def authorize_additional_corpus_path(
     authorization: CorpusWriteAuthorization,
     destination: Path,
 ) -> CorpusWriteAuthorization:
-    return authorize_corpus_write(
+    resolved_destination = _validate_destination(
+        authorization.store_root,
+        destination,
+        source_roots=(),
+        live_roots=(),
+    )
+    return CorpusWriteAuthorization(
         project_root=authorization.project_root,
-        corpus_store_root=authorization.store_root,
-        destination=destination,
+        store_root=authorization.store_root,
+        destination=resolved_destination,
     )

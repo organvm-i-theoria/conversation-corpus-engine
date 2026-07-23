@@ -52,6 +52,7 @@ class SchemaValidationTests(unittest.TestCase):
                 "near-duplicates",
                 "promotion-policy",
                 "provider-refresh",
+                "sharded-collection",
                 "source-policy",
                 "surface-bundle",
                 "surface-manifest",

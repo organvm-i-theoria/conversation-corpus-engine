@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from .answering import load_json, slugify, tokenize, write_json, write_markdown
+from .sharded_collection import collection_storage_path, write_corpus_collection
 
-FEDERATION_CONTRACT = "conversation-corpus-engine-v1"
-FEDERATION_CONTRACT_VERSION = 1
+FEDERATION_CONTRACT = "conversation-corpus-engine.v2"
+FEDERATION_CONTRACT_VERSION = 2
 FEDERATED_REVIEW_TYPES = {
     "entity-alias": ("accepted_entity_aliases", "rejected_entity_aliases"),
     "family-merge": ("accepted_family_merges", "rejected_family_merges"),
@@ -31,6 +32,13 @@ DEFAULT_FEDERATED_DECISIONS = {
     "rejected_contradictions": [],
 }
 CORE_CONTRACT_FILES = (
+    "corpus/threads-index.collection",
+    "corpus/semantic-v3-index.collection",
+    "corpus/pairs-index.collection",
+    "corpus/doctrine-briefs.collection",
+    "corpus/family-dossiers.collection",
+)
+LEGACY_CORE_CONTRACT_FILES = (
     "corpus/threads-index.json",
     "corpus/semantic-v3-index.json",
     "corpus/pairs-index.json",
@@ -903,15 +911,21 @@ def ensure_corpus_contract_manifest(
 ) -> dict[str, Any]:
     path = corpus_root / "corpus" / "contract.json"
     payload = load_json(path, default={}) or {}
+    existing_contract_name = payload.get("contract_name")
+    default_required_files = (
+        LEGACY_CORE_CONTRACT_FILES
+        if existing_contract_name == "conversation-corpus-engine-v1"
+        else CORE_CONTRACT_FILES
+    )
     payload.update(
         {
-            "contract_name": FEDERATION_CONTRACT,
-            "contract_version": FEDERATION_CONTRACT_VERSION,
+            "contract_name": existing_contract_name or FEDERATION_CONTRACT,
+            "contract_version": payload.get("contract_version") or FEDERATION_CONTRACT_VERSION,
             "adapter_type": payload.get("adapter_type") or adapter_type,
             "corpus_id": payload.get("corpus_id") or corpus_id,
             "name": payload.get("name") or name,
             "generated_at": now_iso(),
-            "required_files": list(CORE_CONTRACT_FILES),
+            "required_files": payload.get("required_files") or list(default_required_files),
             "counts": {
                 "threads": summary.get("thread_count", 0),
                 "families": summary.get("family_count", 0),
@@ -1044,14 +1058,18 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
 
     fed_dir = project_root / "federation"
     fed_dir.mkdir(parents=True, exist_ok=True)
-    write_json(fed_dir / "canonical-entities.json", canonical_entities)
-    write_json(fed_dir / "canonical-families.json", canonical_families)
-    write_json(fed_dir / "canonical-actions.json", canonical_actions)
-    write_json(fed_dir / "canonical-unresolved.json", canonical_unresolved)
-    write_json(fed_dir / "doctrine-briefs.json", doctrine_briefs)
-    write_json(fed_dir / "entity-dossiers.json", entity_dossiers)
-    write_json(fed_dir / "project-dossiers.json", project_dossiers)
-    write_json(fed_dir / "lineage-map.json", lineage_map)
+    collections = {
+        "canonical-entities.json": canonical_entities,
+        "canonical-families.json": canonical_families,
+        "canonical-actions.json": canonical_actions,
+        "canonical-unresolved.json": canonical_unresolved,
+        "doctrine-briefs.json": doctrine_briefs,
+        "entity-dossiers.json": entity_dossiers,
+        "project-dossiers.json": project_dossiers,
+        "lineage-map.json": lineage_map,
+    }
+    for filename, records in collections.items():
+        write_corpus_collection(fed_dir / filename, records)
     write_json(fed_dir / "conflict-report.json", conflict_report)
     write_markdown(fed_dir / "overlap-report.md", overlap_report)
     write_markdown(
@@ -1067,14 +1085,20 @@ def build_federated_canon(project_root: Path, surfaces: list[dict[str, Any]]) ->
         ),
     )
     return {
-        "canonical_entities_path": str(fed_dir / "canonical-entities.json"),
-        "canonical_families_path": str(fed_dir / "canonical-families.json"),
-        "canonical_actions_path": str(fed_dir / "canonical-actions.json"),
-        "canonical_unresolved_path": str(fed_dir / "canonical-unresolved.json"),
-        "doctrine_briefs_path": str(fed_dir / "doctrine-briefs.json"),
-        "entity_dossiers_path": str(fed_dir / "entity-dossiers.json"),
-        "project_dossiers_path": str(fed_dir / "project-dossiers.json"),
-        "lineage_map_path": str(fed_dir / "lineage-map.json"),
+        "canonical_entities_path": str(
+            collection_storage_path(fed_dir / "canonical-entities.json")
+        ),
+        "canonical_families_path": str(
+            collection_storage_path(fed_dir / "canonical-families.json")
+        ),
+        "canonical_actions_path": str(collection_storage_path(fed_dir / "canonical-actions.json")),
+        "canonical_unresolved_path": str(
+            collection_storage_path(fed_dir / "canonical-unresolved.json")
+        ),
+        "doctrine_briefs_path": str(collection_storage_path(fed_dir / "doctrine-briefs.json")),
+        "entity_dossiers_path": str(collection_storage_path(fed_dir / "entity-dossiers.json")),
+        "project_dossiers_path": str(collection_storage_path(fed_dir / "project-dossiers.json")),
+        "lineage_map_path": str(collection_storage_path(fed_dir / "lineage-map.json")),
         "conflict_report_path": str(fed_dir / "conflict-report.json"),
         "overlap_report_path": str(fed_dir / "overlap-report.md"),
         "review_queue_path": str(fed_dir / "review-queue.json"),

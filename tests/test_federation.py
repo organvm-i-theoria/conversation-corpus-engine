@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine import federated_canon as FED_CANON
 from conversation_corpus_engine import federation as MODULE
+from conversation_corpus_engine.sharded_collection import load_corpus_collection
 
 
 def token_map(*tokens: str) -> dict[str, float]:
@@ -246,14 +247,14 @@ class MemoryFederationTests(unittest.TestCase):
                 project_root, second_root, corpus_id="notes-memory", name="Notes Memory"
             )
             result = MODULE.build_federation(project_root)
-            corpora_summary = json.loads(
-                (project_root / "federation" / "corpora-summary.json").read_text()
+            corpora_summary = load_corpus_collection(
+                project_root / "federation" / "corpora-summary.json"
             )
-            families_index = json.loads(
-                (project_root / "federation" / "families-index.json").read_text()
+            families_index = load_corpus_collection(
+                project_root / "federation" / "families-index.json"
             )
-            canonical_families = json.loads(
-                (project_root / "federation" / "canonical-families.json").read_text()
+            canonical_families = load_corpus_collection(
+                project_root / "federation" / "canonical-families.json"
             )
 
             self.assertTrue(Path(result["summary_markdown_path"]).exists())

@@ -8,6 +8,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine import federated_canon as MODULE
+from conversation_corpus_engine.sharded_collection import load_corpus_collection
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -180,11 +181,12 @@ def test_build_federated_canon_merges_records_from_accepted_decisions(tmp_path: 
 
     result = MODULE.build_federated_canon(project_root, [alpha_surface, beta_surface])
 
-    canonical_families = json.loads(Path(result["canonical_families_path"]).read_text())
-    canonical_entities = json.loads(Path(result["canonical_entities_path"]).read_text())
-    canonical_actions = json.loads(Path(result["canonical_actions_path"]).read_text())
-    canonical_unresolved = json.loads(Path(result["canonical_unresolved_path"]).read_text())
-    lineage_map = json.loads(Path(result["lineage_map_path"]).read_text())
+    federation_root = project_root / "federation"
+    canonical_families = load_corpus_collection(federation_root / "canonical-families.json")
+    canonical_entities = load_corpus_collection(federation_root / "canonical-entities.json")
+    canonical_actions = load_corpus_collection(federation_root / "canonical-actions.json")
+    canonical_unresolved = load_corpus_collection(federation_root / "canonical-unresolved.json")
+    lineage_map = load_corpus_collection(federation_root / "lineage-map.json")
     conflict_report = json.loads(Path(result["conflict_report_path"]).read_text())
     review_queue = json.loads(Path(result["review_queue_path"]).read_text())
 
@@ -347,7 +349,7 @@ def test_ensure_corpus_contract_manifest_preserves_existing_identity(tmp_path: P
     assert payload["adapter_type"] == "existing-adapter"
     assert payload["corpus_id"] == "existing-corpus-id"
     assert payload["name"] == "Existing Corpus Name"
-    assert payload["required_files"] == list(MODULE.CORE_CONTRACT_FILES)
+    assert payload["required_files"] == list(MODULE.LEGACY_CORE_CONTRACT_FILES)
     assert payload["counts"] == {
         "threads": 2,
         "families": 3,

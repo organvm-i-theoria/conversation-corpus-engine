@@ -5,7 +5,7 @@ import argparse
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .answering import load_json, write_json, write_markdown
 from .claude_local_session import (
@@ -16,7 +16,11 @@ from .claude_local_session import (
     save_acquisition_state,
 )
 from .import_claude_export_corpus import import_claude_export_corpus, now_iso
+from .sharded_collection import content_hash_key, write_collection
 from .source_lifecycle import build_source_snapshot
+
+if TYPE_CHECKING:
+    from .corpus_store import CorpusWriteAuthorization
 
 DEFAULT_OUTPUT_ROOT = Path.cwd() / "claude-local-session-memory"
 DEFAULT_CORPUS_ID = "claude-local-session-memory"
@@ -49,7 +53,15 @@ def write_local_session_bundle(bundle_root: Path, bundle: dict[str, Any]) -> Non
         bundle_root / "conversation-detail-failures.json",
         bundle.get("conversation_detail_failures") or [],
     )
-    write_json(bundle_root / "conversations.json", bundle.get("conversations") or [])
+    write_collection(
+        bundle_root / "conversations.json",
+        bundle.get("conversations") or [],
+        key=lambda record: (
+            str(record.get("uuid") or record.get("id"))
+            if isinstance(record, dict) and (record.get("uuid") or record.get("id"))
+            else content_hash_key(record)
+        ),
+    )
     details_root = bundle_root / "conversation-details"
     details_root.mkdir(parents=True, exist_ok=True)
     for conversation in bundle.get("conversations") or []:
@@ -140,6 +152,7 @@ def import_claude_local_session_corpus(
     corpus_id: str = DEFAULT_CORPUS_ID,
     name: str = DEFAULT_NAME,
     throttle: float = 0.0,
+    authorization: CorpusWriteAuthorization | None = None,
 ) -> dict[str, Any]:
     local_root = local_root.resolve()
     discovery = discover_claude_local_session(local_root)
@@ -169,7 +182,12 @@ def import_claude_local_session_corpus(
         bundle_root = Path(tmpdir) / "claude-local-bundle"
         write_local_session_bundle(bundle_root, bundle)
         result = import_claude_export_corpus(
-            bundle_root, output_root, corpus_id=corpus_id, name=name, throttle=throttle
+            bundle_root,
+            output_root,
+            corpus_id=corpus_id,
+            name=name,
+            throttle=throttle,
+            authorization=authorization,
         )
         source_root = output_root / "source"
         source_root.mkdir(parents=True, exist_ok=True)

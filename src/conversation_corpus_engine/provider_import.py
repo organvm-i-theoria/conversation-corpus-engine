@@ -146,6 +146,7 @@ def import_provider_corpus(
             corpus_id=resolved_corpus_id,
             name=resolved_name,
             throttle=throttle,
+            authorization=authorization,
         )
     elif provider == "chatgpt" and mode == "local-session":
         import_result = import_chatgpt_local_session_corpus(
@@ -154,6 +155,7 @@ def import_provider_corpus(
             corpus_id=resolved_corpus_id,
             name=resolved_name,
             throttle=throttle,
+            authorization=authorization,
         )
     elif provider == "chatgpt":
         import_result = import_chatgpt_export_corpus(
@@ -162,6 +164,7 @@ def import_provider_corpus(
             corpus_id=resolved_corpus_id,
             name=resolved_name,
             throttle=throttle,
+            authorization=authorization,
         )
     elif provider == "claude":
         import_result = import_claude_export_corpus(
@@ -170,6 +173,7 @@ def import_provider_corpus(
             corpus_id=resolved_corpus_id,
             name=resolved_name,
             throttle=throttle,
+            authorization=authorization,
         )
     else:
         import_result = import_document_export_corpus(
@@ -179,6 +183,7 @@ def import_provider_corpus(
             corpus_id=resolved_corpus_id,
             name=resolved_name,
             throttle=throttle,
+            authorization=authorization,
         )
 
     bootstrap_result = (

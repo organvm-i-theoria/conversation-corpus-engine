@@ -14,6 +14,10 @@ from conversation_corpus_engine.import_claude_export_corpus import (  # noqa: E4
     extract_message_text,
     import_claude_export_corpus,
 )
+from conversation_corpus_engine.sharded_collection import (  # noqa: E402
+    collection_storage_path,
+    load_corpus_collection,
+)
 
 
 class ImportClaudeExportCorpusTests(unittest.TestCase):
@@ -102,9 +106,7 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
             self.assertEqual(contract["adapter_type"], "claude-export")
             self.assertEqual(contract["counts"]["threads"], 1)
             self.assertTrue((output_root / "corpus" / "source-snapshot.json").exists())
-            threads = json.loads(
-                (output_root / "corpus" / "threads-index.json").read_text(encoding="utf-8")
-            )
+            threads = load_corpus_collection(output_root / "corpus" / "threads-index.json")
             self.assertEqual(threads[0]["title_normalized"], "Claude Test Thread")
             self.assertIn("claude-export", threads[0]["tags"])
             readme = (output_root / "README.md").read_text(encoding="utf-8")
@@ -204,12 +206,8 @@ class ImportClaudeExportCorpusTests(unittest.TestCase):
             contract = json.loads(
                 (output_root / "corpus" / "contract.json").read_text(encoding="utf-8")
             )
-            audits = json.loads(
-                (output_root / "corpus" / "import-audit.json").read_text(encoding="utf-8")
-            )
-            duplicates = json.loads(
-                (output_root / "corpus" / "near-duplicates.json").read_text(encoding="utf-8")
-            )
+            audits = load_corpus_collection(output_root / "corpus" / "import-audit.json")
+            duplicates = load_corpus_collection(output_root / "corpus" / "near-duplicates.json")
 
             self.assertEqual(result["near_duplicate_count"], 1)
             self.assertEqual(contract["counts"]["near_duplicates"], 1)
@@ -447,8 +445,16 @@ class ImportMultiPartCorpusTests(unittest.TestCase):
             self.assertEqual(result["duplicate_conversations_skipped"], 1)
             self.assertEqual(result["thread_count"], 3, "Expected 3 unique threads after dedup")
 
-            self.assertTrue((output / "source" / "part-1" / "conversations.json").exists())
-            self.assertTrue((output / "source" / "part-2" / "conversations.json").exists())
+            self.assertTrue(
+                collection_storage_path(
+                    output / "source" / "part-1" / "conversations.json"
+                ).exists()
+            )
+            self.assertTrue(
+                collection_storage_path(
+                    output / "source" / "part-2" / "conversations.json"
+                ).exists()
+            )
 
             readme_text = (output / "README.md").read_text(encoding="utf-8")
             self.assertIn("Bundle parts: 2", readme_text)
@@ -464,7 +470,9 @@ class ImportMultiPartCorpusTests(unittest.TestCase):
 
             self.assertEqual(result["bundle_part_count"], 1)
             self.assertEqual(result["duplicate_conversations_skipped"], 0)
-            self.assertTrue((output / "source" / "conversations.json").exists())
+            self.assertTrue(
+                collection_storage_path(output / "source" / "conversations.json").exists()
+            )
             self.assertFalse((output / "source" / "export").exists())
 
 
