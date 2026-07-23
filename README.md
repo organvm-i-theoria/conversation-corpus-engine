@@ -91,6 +91,8 @@ cce candidate stage --project-root /path/to/project --candidate-root /path/to/ca
 cce candidate review --project-root /path/to/project --candidate-id latest --decision approve --note "promote candidate"
 cce candidate promote --project-root /path/to/project --candidate-id latest --note "replace live corpus"
 cce candidate rollback --project-root /path/to/project --target previous --note "restore previous live corpus"
+cce migration corpus-v2 --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-root /path/to/legacy-corpus --destination-root /path/to/private-corpus-store/migrated-corpus
+cce migration corpus-v2 --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --source-root /path/to/legacy-corpus --destination-root /path/to/private-corpus-store/migrated-corpus --write
 cce evaluation run --root /path/to/corpus --project-root /path/to/project --corpus-store-root /path/to/private-corpus-store --seed --json
 cce review queue --project-root /path/to/project
 cce review resolve federated-family-merge-... --decision accepted --note "same family"
@@ -105,6 +107,18 @@ implicit fallback. A store must already exist, must not traverse symlinks or con
 Git repositories, and must either live outside Git or be wholly ignored and untracked.
 Provider imports default to `<store>/<corpus-id>`, while refresh candidates default to
 `<store>/provider-refresh/<provider>/<run-id>/candidate-corpus`.
+
+Corpus writers publish `conversation-corpus-engine.v2` collections as immutable
+`cce.sharded_collection.v1` generations. A logical collection such as
+`corpus/threads-index.json` is stored under `corpus/threads-index.collection/`, with an
+atomically replaced `CURRENT` pointer, a verified manifest, and SHA-256-prefix JSONL
+shards capped at 8 MiB and 1,000 records. Readers prefer v2 and read legacy v1 JSON only
+when no v2 storage directory exists; malformed v2 state fails closed.
+
+`cce migration corpus-v2` is read-only unless `--write` is supplied. The write mode
+requires an authorized destination beneath the exactly registered store, preserves the
+v1 source, converts copied `source/conversations.json` data to a sharded collection, and
+is deterministic on rerun.
 
 ## MCP Tools
 
@@ -123,6 +137,8 @@ currently exposes:
 - `src/conversation_corpus_engine/federated_canon.py` — federated review state and canon builders
 - `src/conversation_corpus_engine/federation.py` — corpus registry and federation build/query logic
 - `src/conversation_corpus_engine/corpus_store.py` — private corpus-store registration and write authorization
+- `src/conversation_corpus_engine/sharded_collection.py` — immutable v2 collection publication, validation, and v1-compatible reads
+- `src/conversation_corpus_engine/migration.py` — read-only planning and authorized v1-to-v2 corpus migration
 - `src/conversation_corpus_engine/import_markdown_document_corpus.py` — generic markdown corpus materialization
 - `src/conversation_corpus_engine/import_document_export_corpus.py` — document-style provider export import
 - `src/conversation_corpus_engine/import_claude_export_corpus.py` — Claude bundle import

@@ -40,7 +40,7 @@ from .governance_candidates import (
 )
 from .governance_policy import load_or_create_promotion_policy
 from .governance_replay import build_policy_replay_payload, write_policy_replay_artifacts
-from .migration import seed_registry_from_staging
+from .migration import migrate_corpus_v2, seed_registry_from_staging
 from .paths import default_project_root
 from .persona_extract import extract_persona_lexicon, write_persona_extract_artifacts
 from .provider_catalog import default_source_drop_root
@@ -177,6 +177,16 @@ def build_parser() -> argparse.ArgumentParser:
     migration_review_ids.add_argument("--project-root", type=Path, default=default_project_root())
     migration_review_ids.add_argument("--dry-run", action="store_true")
     migration_review_ids.add_argument("--json", action="store_true")
+
+    migration_corpus_v2 = migration_sub.add_parser(
+        "corpus-v2", help="Plan or write an authorized v1-to-v2 corpus migration"
+    )
+    migration_corpus_v2.add_argument("--source-root", type=Path, required=True)
+    migration_corpus_v2.add_argument("--destination-root", type=Path, required=True)
+    migration_corpus_v2.add_argument("--project-root", type=Path, default=default_project_root())
+    migration_corpus_v2.add_argument("--corpus-store-root", type=Path)
+    migration_corpus_v2.add_argument("--write", action="store_true")
+    migration_corpus_v2.add_argument("--json", action="store_true")
 
     provider = subparsers.add_parser("provider", help="Inspect provider intake and readiness")
     provider_sub = provider.add_subparsers(dest="action", required=True)
@@ -796,6 +806,24 @@ def main() -> None:
             print(f"  Decisions migrated: {stats.get('decisions_migrated', 0)}")
             print(f"  Unchanged:          {stats.get('unchanged', 0)}")
             print(f"  Unique mappings:    {result.get('id_count', 0)}")
+        return
+
+    if args.group == "migration" and args.action == "corpus-v2":
+        result = migrate_corpus_v2(
+            project_root=args.project_root,
+            source_root=args.source_root,
+            destination_root=args.destination_root,
+            corpus_store_root=args.corpus_store_root,
+            write=args.write,
+        )
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print(
+                f"Corpus v2 migration ({result['mode']}): {result['collection_count']} collections"
+            )
+            print(f"  Source:      {result['source_root']}")
+            print(f"  Destination: {result['destination_root']}")
         return
 
     if args.group == "provider" and args.action == "discover":

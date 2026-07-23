@@ -9,14 +9,27 @@ from collections import Counter
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .answering import slugify, tokenize, write_json, write_markdown
+from .sharded_collection import (
+    collection_exists,
+    collection_storage_path,
+    content_hash_key,
+    load_collection,
+    merge_entity_records,
+    merge_ledger_records,
+    write_collection,
+    write_corpus_collection,
+)
 from .source_lifecycle import build_source_snapshot
 
+if TYPE_CHECKING:
+    from .corpus_store import CorpusWriteAuthorization
+
 DEFAULT_OUTPUT_ROOT = Path.cwd() / "chatgpt-history-memory"
-CONTRACT_NAME = "conversation-corpus-engine-v1"
-CONTRACT_VERSION = 1
+CONTRACT_NAME = "conversation-corpus-engine.v2"
+CONTRACT_VERSION = 2
 REQUIRED_BUNDLE_FILES = ("conversations.json", "user.json")
 STOP_WORDS = {
     "a",
@@ -138,6 +151,11 @@ def load_json_file(path: Path, default: Any) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def bundle_file_exists(bundle_root: Path, name: str) -> bool:
+    path = bundle_root / name
+    return collection_exists(path) if name == "conversations.json" else path.exists()
+
+
 def resolve_bundle_root(input_path: Path) -> Path:
     input_path = input_path.resolve()
     if input_path.is_file():
@@ -149,7 +167,7 @@ def resolve_bundle_root(input_path: Path) -> Path:
             )
     else:
         bundle_root = input_path
-    missing = [name for name in REQUIRED_BUNDLE_FILES if not (bundle_root / name).exists()]
+    missing = [name for name in REQUIRED_BUNDLE_FILES if not bundle_file_exists(bundle_root, name)]
     if missing:
         raise FileNotFoundError(
             f"ChatGPT export bundle at {bundle_root} is missing required files: {', '.join(missing)}"
@@ -174,16 +192,16 @@ def discover_bundle_roots(input_path: Path) -> list[Path]:
         raise ValueError(
             f"Expected a ChatGPT export directory or conversations.json file, got {input_path}"
         )
-    if all((input_path / name).exists() for name in REQUIRED_BUNDLE_FILES):
+    if all(bundle_file_exists(input_path, name) for name in REQUIRED_BUNDLE_FILES):
         return [input_path]
     parts = sorted(
         child
         for child in input_path.iterdir()
-        if child.is_dir() and all((child / name).exists() for name in REQUIRED_BUNDLE_FILES)
+        if child.is_dir() and all(bundle_file_exists(child, name) for name in REQUIRED_BUNDLE_FILES)
     )
     if parts:
         return parts
-    missing = [name for name in REQUIRED_BUNDLE_FILES if not (input_path / name).exists()]
+    missing = [name for name in REQUIRED_BUNDLE_FILES if not bundle_file_exists(input_path, name)]
     raise FileNotFoundError(
         f"ChatGPT export bundle at {input_path} is missing required files: "
         f"{', '.join(missing)} (no multi-part subdirectories with valid bundles found either)"
@@ -602,7 +620,11 @@ def detect_near_duplicates(
 
 
 def copy_bundle_files(
-    bundle_root: Path, output_root: Path, *, prefix: str | None = None
+    bundle_root: Path,
+    output_root: Path,
+    *,
+    prefix: str | None = None,
+    authorization: CorpusWriteAuthorization | None = None,
 ) -> list[str]:
     copied: list[str] = []
     source_root = output_root / "source"
@@ -610,11 +632,28 @@ def copy_bundle_files(
         source_root = source_root / prefix
     source_root.mkdir(parents=True, exist_ok=True)
     for path in sorted(bundle_root.rglob("*.json")):
+        if (
+            path == bundle_root / "conversations.json"
+            or collection_storage_path(bundle_root / "conversations.json") in path.parents
+        ):
+            continue
         relative = path.relative_to(bundle_root)
         destination = source_root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
         copied.append(str(destination))
+    conversations_path = source_root / "conversations.json"
+    write_collection(
+        conversations_path,
+        load_collection(bundle_root / "conversations.json", default=[]),
+        key=lambda record: (
+            str(record.get("conversation_id") or record.get("id"))
+            if isinstance(record, dict) and (record.get("conversation_id") or record.get("id"))
+            else content_hash_key(record)
+        ),
+        authorization=authorization,
+    )
+    copied.append(str(collection_storage_path(conversations_path)))
     return copied
 
 
@@ -625,6 +664,7 @@ def import_chatgpt_export_corpus(
     corpus_id: str | None = None,
     name: str | None = None,
     throttle: float = 0.0,
+    authorization: CorpusWriteAuthorization | None = None,
 ) -> dict[str, Any]:
     bundle_roots = discover_bundle_roots(input_path)
     bundle_root = bundle_roots[0]  # primary — used for source_snapshot, manifest, briefs
@@ -634,7 +674,10 @@ def import_chatgpt_export_corpus(
     seen_conversation_ids: set[str] = set()
     duplicate_skipped_count = 0
     for part_root in bundle_roots:
-        part_conversations = load_json_file(part_root / "conversations.json", default=[])
+        part_conversations = load_collection(
+            part_root / "conversations.json",
+            default=[],
+        )
         for conv in part_conversations:
             cid = conv.get("conversation_id")
             if cid and cid in seen_conversation_ids:
@@ -651,7 +694,14 @@ def import_chatgpt_export_corpus(
     copied_sources: list[str] = []
     for part_root in bundle_roots:
         part_prefix = part_root.name if is_multi_part else None
-        copied_sources.extend(copy_bundle_files(part_root, output_root, prefix=part_prefix))
+        copied_sources.extend(
+            copy_bundle_files(
+                part_root,
+                output_root,
+                prefix=part_prefix,
+                authorization=authorization,
+            )
+        )
 
     threads: list[dict[str, Any]] = []
     semantic_threads: list[dict[str, Any]] = []
@@ -763,7 +813,7 @@ def import_chatgpt_export_corpus(
                 "action_count": len(action_items),
                 "unresolved_question_count": len(unresolved_items),
                 "audit_flags": audit.get("quality_flags", []),
-                "thread_path": str(output_root / "source" / "conversations.json"),
+                "thread_path": str(output_root / "source" / "conversations.collection"),
                 "family_ids": [family_id],
                 "update_time_iso": update_time,
             },
@@ -846,7 +896,17 @@ def import_chatgpt_export_corpus(
             },
         )
 
-    entities = list(entity_map.values())
+    actions = merge_ledger_records(
+        actions,
+        key_field="action_key",
+        text_field="canonical_action",
+    )
+    unresolved = merge_ledger_records(
+        unresolved,
+        key_field="question_key",
+        text_field="canonical_question",
+    )
+    entities = merge_entity_records(entity_map.values())
     entity_aliases = [
         {"canonical_label": entity["canonical_label"], "labels": entity.get("aliases", [])}
         for entity in entities
@@ -857,20 +917,32 @@ def import_chatgpt_export_corpus(
 
     corpus_dir = output_root / "corpus"
     source_snapshot = build_source_snapshot(bundle_root, "chatgpt-export", "bundle-json")
-    write_json(corpus_dir / "threads-index.json", threads)
-    write_json(corpus_dir / "semantic-v3-index.json", {"threads": semantic_threads})
-    write_json(corpus_dir / "pairs-index.json", pairs)
-    write_json(corpus_dir / "doctrine-briefs.json", doctrine_briefs)
-    write_json(corpus_dir / "family-dossiers.json", family_dossiers)
-    write_json(corpus_dir / "canonical-families.json", canonical_families)
-    write_json(corpus_dir / "action-ledger.json", actions)
-    write_json(corpus_dir / "unresolved-ledger.json", unresolved)
-    write_json(corpus_dir / "canonical-entities.json", entities)
-    write_json(corpus_dir / "entity-aliases.json", entity_aliases)
-    write_json(corpus_dir / "doctrine-timeline.json", [])
-    write_json(corpus_dir / "import-audit.json", thread_audits)
+    collections = {
+        "threads-index.json": threads,
+        "semantic-v3-index.json": semantic_threads,
+        "pairs-index.json": pairs,
+        "doctrine-briefs.json": doctrine_briefs,
+        "family-dossiers.json": family_dossiers,
+        "canonical-families.json": canonical_families,
+        "action-ledger.json": actions,
+        "unresolved-ledger.json": unresolved,
+        "canonical-entities.json": entities,
+        "entity-aliases.json": entity_aliases,
+        "doctrine-timeline.json": [],
+        "import-audit.json": thread_audits,
+    }
+    for filename, records in collections.items():
+        write_corpus_collection(
+            corpus_dir / filename,
+            records,
+            authorization=authorization,
+        )
     if near_duplicates:
-        write_json(corpus_dir / "near-duplicates.json", near_duplicates)
+        write_corpus_collection(
+            corpus_dir / "near-duplicates.json",
+            near_duplicates,
+            authorization=authorization,
+        )
     write_json(corpus_dir / "source-snapshot.json", source_snapshot)
     write_json(
         corpus_dir / "contract.json",
@@ -882,11 +954,11 @@ def import_chatgpt_export_corpus(
             "name": name or output_root.name,
             "generated_at": now_iso(),
             "required_files": [
-                "corpus/threads-index.json",
-                "corpus/semantic-v3-index.json",
-                "corpus/pairs-index.json",
-                "corpus/doctrine-briefs.json",
-                "corpus/family-dossiers.json",
+                "corpus/threads-index.collection",
+                "corpus/semantic-v3-index.collection",
+                "corpus/pairs-index.collection",
+                "corpus/doctrine-briefs.collection",
+                "corpus/family-dossiers.collection",
             ],
             "counts": {
                 "threads": len(threads),
@@ -929,7 +1001,11 @@ def import_chatgpt_export_corpus(
             "gates": [],
         },
     )
-    write_json(output_root / "import-manifest.json", import_manifest)
+    write_corpus_collection(
+        output_root / "import-manifest.json",
+        import_manifest,
+        authorization=authorization,
+    )
     write_markdown(
         output_root / "README.md",
         "\n".join(
@@ -967,7 +1043,7 @@ def import_chatgpt_export_corpus(
         "empty_conversation_count": empty_conversation_count,
         "near_duplicate_count": len(near_duplicates),
         "flagged_thread_count": sum(1 for a in thread_audits if a.get("quality_flags")),
-        "manifest_path": str(output_root / "import-manifest.json"),
+        "manifest_path": str(collection_storage_path(output_root / "import-manifest.json")),
         "readme_path": str(output_root / "README.md"),
         "bundle_part_count": len(bundle_roots),
         "bundle_part_names": [p.name for p in bundle_roots],

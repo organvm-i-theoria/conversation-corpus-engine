@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .answering import STOP_WORDS, load_json, shorten, tokenize
+from .sharded_collection import collection_exists, iter_corpus_collection
 
 # Persona identifiers that denote the assistant/model side of a transcript.
 # Everything else (rob, user, human, operator, ...) is treated as a human persona.
@@ -259,8 +260,8 @@ def _collect_segments(source: Path, persona_id: str) -> tuple[list[str], list[st
     turns: list[tuple[str, str]] = []
 
     pairs_index = source / "corpus" / "pairs-index.json"
-    if pairs_index.exists():
-        for pair in load_json(pairs_index, default=[]) or []:
+    if collection_exists(pairs_index):
+        for pair in iter_corpus_collection(pairs_index):
             summary = pair.get("summary") or pair.get("search_text") or ""
             user_segment, assistant_segment = _split_pair_summary(summary)
             turns.append(("user", user_segment))

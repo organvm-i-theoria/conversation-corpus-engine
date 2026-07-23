@@ -22,6 +22,7 @@ from .corpus_store import (
     authorize_corpus_write,
 )
 from .paths import default_project_root
+from .sharded_collection import load_corpus_collection
 
 DEFAULT_ROOT = Path.cwd()
 DETECTOR_KEYS = (
@@ -248,10 +249,13 @@ def seed_gold(root: Path) -> dict[str, Path]:
     fixtures_manual_dir.mkdir(parents=True, exist_ok=True)
 
     canonical_decisions = load_json(root / "state" / "canonical-decisions.json", default={}) or {}
-    canonical_families = load_json(root / "corpus" / "canonical-families.json", default=[]) or []
-    doctrine_briefs = load_json(root / "corpus" / "doctrine-briefs.json", default=[]) or []
-    family_dossiers = load_json(root / "corpus" / "family-dossiers.json", default=[]) or []
-    pairs_index = load_json(root / "corpus" / "pairs-index.json", default=[]) or []
+    corpus_dir = root / "corpus"
+    canonical_families = (
+        load_corpus_collection(corpus_dir / "canonical-families.json", default=[]) or []
+    )
+    doctrine_briefs = load_corpus_collection(corpus_dir / "doctrine-briefs.json", default=[]) or []
+    family_dossiers = load_corpus_collection(corpus_dir / "family-dossiers.json", default=[]) or []
+    pairs_index = load_corpus_collection(corpus_dir / "pairs-index.json", default=[]) or []
 
     detectors_payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -458,7 +462,9 @@ def evaluate_current_corpus(root: Path) -> dict[str, Any]:
     answer_payload, answer_source, answer_path = load_preferred_fixture(root, "answers")
 
     canonical_decisions = load_json(root / "state" / "canonical-decisions.json", default={}) or {}
-    canonical_families = load_json(root / "corpus" / "canonical-families.json", default=[]) or []
+    canonical_families = (
+        load_corpus_collection(root / "corpus" / "canonical-families.json", default=[]) or []
+    )
 
     # Pre-build the corpus document index once — avoids rebuilding from disk per fixture.
     corpus = build_documents(root)
