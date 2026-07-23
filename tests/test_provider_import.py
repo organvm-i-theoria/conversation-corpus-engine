@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from conversation_corpus_engine.corpus_store import CorpusStoreError, register_corpus_store
 from conversation_corpus_engine.federation import list_registered_corpora
 from conversation_corpus_engine.perplexity_local_session import DEFAULT_PERPLEXITY_COOKIE_JAR
+from conversation_corpus_engine.provider_catalog import get_provider_config
 from conversation_corpus_engine.provider_import import (
     default_output_root,
     import_provider_corpus,
@@ -143,8 +144,6 @@ class PerplexityLocalSessionResolutionTests(unittest.TestCase):
         # already-resolved (store_root, corpus_id); corpus_id resolution moved up
         # into import_provider_corpus, which uses the catalog default_corpus_id for
         # perplexity local-session. Assert the invariant at both its new homes.
-        from conversation_corpus_engine.provider_catalog import get_provider_config
-
         corpus_id = get_provider_config("perplexity")["default_corpus_id"]
         self.assertEqual(corpus_id, "perplexity-history-memory")
         with tempfile.TemporaryDirectory() as tmpdir:
