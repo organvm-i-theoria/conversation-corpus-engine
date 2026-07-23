@@ -30,7 +30,9 @@ DEFAULT_NAME = "Perplexity Local Session Memory"
 
 def render_thread_markdown(thread: dict[str, Any]) -> str:
     """Render one normalized thread record as a conversation markdown document."""
-    title = thread.get("title_normalized") or thread.get("title_raw") or "Untitled Perplexity Thread"
+    title = (
+        thread.get("title_normalized") or thread.get("title_raw") or "Untitled Perplexity Thread"
+    )
     lines = [f"# {title}", ""]
     url = thread.get("url")
     if url:
@@ -63,9 +65,7 @@ def write_thread_markdown_bundle(bundle_root: Path, bundle: dict[str, Any]) -> i
             base = f"{base}-{seen[base]}"
         else:
             seen[base] = 0
-        (bundle_root / f"{base}.md").write_text(
-            render_thread_markdown(thread), encoding="utf-8"
-        )
+        (bundle_root / f"{base}.md").write_text(render_thread_markdown(thread), encoding="utf-8")
         written += 1
     return written
 

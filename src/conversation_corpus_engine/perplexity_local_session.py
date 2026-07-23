@@ -104,9 +104,7 @@ def _request_json(
             f"{error.code} while fetching {url}: {body[:500]}"
         ) from error
     except URLError as error:
-        raise PerplexityLocalSessionError(
-            f"Network error while fetching {url}: {error}"
-        ) from error
+        raise PerplexityLocalSessionError(f"Network error while fetching {url}: {error}") from error
 
 
 def _fetch_session(cookies: list[Cookie]) -> dict[str, Any]:

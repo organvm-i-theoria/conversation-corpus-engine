@@ -31,11 +31,7 @@ def _entry_text() -> str:
         {"step_type": "SEARCH_RESULTS", "content": {"web_results": [{"url": "https://x"}]}},
         {
             "step_type": "FINAL",
-            "content": {
-                "answer": json.dumps(
-                    {"answer": "The capital of France is **Paris**."}
-                )
-            },
+            "content": {"answer": json.dumps({"answer": "The capital of France is **Paris**."})},
         },
     ]
     return json.dumps(steps)
@@ -131,9 +127,7 @@ def test_build_perplexity_session_raises_when_invalid(
 ) -> None:
     jar = tmp_path / "perplexity.binarycookies"
     jar.write_bytes(
-        build_binary_cookie_jar(
-            [{"domain": "www.perplexity.ai", "name": "x", "value": "y"}]
-        )
+        build_binary_cookie_jar([{"domain": "www.perplexity.ai", "name": "x", "value": "y"}])
     )
     monkeypatch.setattr(module, "_fetch_session", lambda cookies: {"user": {}})
     with pytest.raises(PerplexityLocalSessionError, match="Perplexity macOS app"):
@@ -167,14 +161,10 @@ def test_discover_perplexity_local_session_returns_summary(
 ) -> None:
     jar = tmp_path / "perplexity.binarycookies"
     jar.write_bytes(
-        build_binary_cookie_jar(
-            [{"domain": "www.perplexity.ai", "name": "x", "value": "y"}]
-        )
+        build_binary_cookie_jar([{"domain": "www.perplexity.ai", "name": "x", "value": "y"}])
     )
     monkeypatch.setattr(module, "build_perplexity_session", lambda cookie_jar: _fake_session())
-    monkeypatch.setattr(
-        module, "_list_recent_threads", lambda session, **_kw: [_sample_summary()]
-    )
+    monkeypatch.setattr(module, "_list_recent_threads", lambda session, **_kw: [_sample_summary()])
 
     payload = module.discover_perplexity_local_session(jar)
     assert payload["session_state"] == "ready"
@@ -188,17 +178,11 @@ def test_materialize_writes_threads_and_index(
 ) -> None:
     jar = tmp_path / "perplexity.binarycookies"
     jar.write_bytes(
-        build_binary_cookie_jar(
-            [{"domain": "www.perplexity.ai", "name": "x", "value": "y"}]
-        )
+        build_binary_cookie_jar([{"domain": "www.perplexity.ai", "name": "x", "value": "y"}])
     )
     monkeypatch.setattr(module, "build_perplexity_session", lambda cookie_jar: _fake_session())
-    monkeypatch.setattr(
-        module, "_list_recent_threads", lambda session, **_kw: [_sample_summary()]
-    )
-    monkeypatch.setattr(
-        module, "_fetch_thread_detail", lambda session, uuid: _sample_detail()
-    )
+    monkeypatch.setattr(module, "_list_recent_threads", lambda session, **_kw: [_sample_summary()])
+    monkeypatch.setattr(module, "_fetch_thread_detail", lambda session, uuid: _sample_detail())
 
     out = tmp_path / "out"
     summary = module.materialize_perplexity_local_session(out, cookie_jar=jar)
