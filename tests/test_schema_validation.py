@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine.corpus_candidates import stage_corpus_candidate
+from conversation_corpus_engine.corpus_store import register_corpus_store
 from conversation_corpus_engine.federation import upsert_corpus
 from conversation_corpus_engine.governance_policy import (
     load_or_create_promotion_policy,
@@ -182,6 +183,7 @@ class SchemaValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace_root = Path(tmpdir)
             project_root = workspace_root / "project"
+            project_root.mkdir()
             primary_root = workspace_root / "gemini-history-memory"
             fallback_root = workspace_root / "gemini-archive-memory"
             primary_root.mkdir(parents=True, exist_ok=True)
@@ -276,6 +278,9 @@ class SchemaValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace_root = Path(tmpdir)
             project_root = workspace_root / "project"
+            project_root.mkdir()
+            corpus_store_root = workspace_root / "corpus-store"
+            corpus_store_root.mkdir()
             live_source = workspace_root / "live-source"
             live_root = workspace_root / "perplexity-history-memory"
             source_drop_root = workspace_root / "source-drop"
@@ -306,6 +311,7 @@ class SchemaValidationTests(unittest.TestCase):
                 name="Perplexity History Memory",
                 make_default=True,
             )
+            register_corpus_store(project_root, corpus_store_root)
             set_source_policy(
                 project_root,
                 "perplexity",
@@ -319,6 +325,7 @@ class SchemaValidationTests(unittest.TestCase):
                 project_root=project_root,
                 provider="perplexity",
                 source_drop_root=source_drop_root,
+                corpus_store_root=corpus_store_root,
                 note="Stage a refreshed Perplexity corpus.",
             )
             result = validate_json_file("provider-refresh", Path(payload["refresh_json_path"]))

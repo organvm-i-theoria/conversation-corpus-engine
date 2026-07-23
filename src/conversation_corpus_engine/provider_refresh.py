@@ -12,6 +12,11 @@ from .corpus_candidates import (
     review_corpus_candidate,
     stage_corpus_candidate,
 )
+from .corpus_store import (
+    authorize_additional_corpus_path,
+    authorize_corpus_write,
+    resolve_configured_corpus_store_root,
+)
 from .evaluation import run_corpus_evaluation
 from .provider_catalog import get_provider_config
 from .provider_import import import_provider_corpus
@@ -71,8 +76,8 @@ def infer_refresh_mode(
     return "upload", "live-corpus-id"
 
 
-def default_refresh_candidate_root(project_root: Path, provider: str, run_id: str) -> Path:
-    return provider_refresh_runs_dir(project_root) / provider / run_id / "candidate-corpus"
+def default_refresh_candidate_root(corpus_store_root: Path, provider: str, run_id: str) -> Path:
+    return corpus_store_root / "provider-refresh" / provider / run_id / "candidate-corpus"
 
 
 def render_provider_refresh(payload: dict[str, Any]) -> str:
@@ -108,6 +113,7 @@ def refresh_provider_corpus(
     local_root: Path | None = None,
     live_corpus_id: str | None = None,
     candidate_root: Path | None = None,
+    corpus_store_root: Path | None = None,
     bootstrap_eval: bool = True,
     run_eval: bool = True,
     approve: bool = False,
@@ -116,6 +122,19 @@ def refresh_provider_corpus(
     throttle: float = 0.0,
 ) -> dict[str, Any]:
     resolved_project_root = project_root.resolve()
+    configured_store_root = resolve_configured_corpus_store_root(corpus_store_root)
+    run_id = f"{provider}-{timestamp_slug()}"
+    requested_candidate_root = candidate_root or default_refresh_candidate_root(
+        configured_store_root,
+        provider,
+        run_id,
+    )
+    preliminary_authorization = authorize_corpus_write(
+        project_root=resolved_project_root,
+        corpus_store_root=configured_store_root,
+        destination=requested_candidate_root,
+    )
+    resolved_candidate_root = preliminary_authorization.destination
     live_entry = resolve_live_entry(
         resolved_project_root,
         live_corpus_id=live_corpus_id,
@@ -126,15 +145,14 @@ def refresh_provider_corpus(
         live_corpus_id=live_entry["corpus_id"],
         mode=mode,
     )
-    run_id = f"{provider}-{timestamp_slug()}"
-    resolved_candidate_root = (
-        candidate_root
-        or default_refresh_candidate_root(
-            resolved_project_root,
-            provider,
-            run_id,
-        )
-    ).resolve()
+    authorization = authorize_corpus_write(
+        project_root=resolved_project_root,
+        corpus_store_root=preliminary_authorization.store_root,
+        destination=resolved_candidate_root,
+        live_roots=(Path(live_entry["root"]),),
+    )
+    refresh_root = resolved_candidate_root.parent
+    authorize_additional_corpus_path(authorization, refresh_root)
 
     import_result = import_provider_corpus(
         project_root=resolved_project_root,
@@ -144,6 +162,7 @@ def refresh_provider_corpus(
         source_path=source_path,
         local_root=local_root,
         output_root=resolved_candidate_root,
+        corpus_store_root=authorization.store_root,
         corpus_id=live_entry["corpus_id"],
         name=live_entry["name"],
         register=False,
@@ -155,7 +174,11 @@ def refresh_provider_corpus(
     scorecard = None
     evaluation_outputs: dict[str, str] = {}
     if run_eval:
-        scorecard, outputs = run_corpus_evaluation(resolved_candidate_root, seed=True)
+        scorecard, outputs = run_corpus_evaluation(
+            resolved_candidate_root,
+            seed=True,
+            authorization=authorization,
+        )
         evaluation_outputs = {key: str(value) for key, value in outputs.items()}
 
     candidate_manifest = stage_corpus_candidate(
@@ -186,7 +209,6 @@ def refresh_provider_corpus(
         resolved_project_root,
         candidate_id=candidate_manifest["candidate_id"],
     )
-    refresh_root = resolved_candidate_root.parent
     payload = {
         "run_id": run_id,
         "generated_at": now_iso(),

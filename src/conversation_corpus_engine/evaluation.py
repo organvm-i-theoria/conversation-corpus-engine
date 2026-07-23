@@ -15,6 +15,13 @@ from .answering import (
     write_json,
     write_markdown,
 )
+from .corpus_store import (
+    CorpusStoreError,
+    CorpusWriteAuthorization,
+    authorize_additional_corpus_path,
+    authorize_corpus_write,
+)
+from .paths import default_project_root
 
 DEFAULT_ROOT = Path.cwd()
 DETECTOR_KEYS = (
@@ -52,6 +59,8 @@ def parse_args() -> argparse.Namespace:
         description="Evaluate a conversation corpus against local gold fixtures."
     )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--project-root", type=Path, default=default_project_root())
+    parser.add_argument("--corpus-store-root", type=Path)
     parser.add_argument(
         "--seed",
         action="store_true",
@@ -821,8 +830,32 @@ def run_corpus_evaluation(
     seed: bool = False,
     markdown_output: Path | None = None,
     json_output: Path | None = None,
+    project_root: Path | None = None,
+    corpus_store_root: Path | None = None,
+    authorization: CorpusWriteAuthorization | None = None,
 ) -> tuple[dict[str, Any], dict[str, Path]]:
-    root = root.resolve()
+    requested_root = root
+    if authorization is None:
+        if project_root is None:
+            raise CorpusStoreError(
+                "Evaluation writes require project_root and registered corpus-store custody."
+            )
+        resolved_authorization = authorize_corpus_write(
+            project_root=project_root,
+            corpus_store_root=corpus_store_root,
+            destination=requested_root,
+        )
+    else:
+        resolved_authorization = authorize_corpus_write(
+            project_root=authorization.project_root,
+            corpus_store_root=authorization.store_root,
+            destination=requested_root,
+        )
+    root = resolved_authorization.destination
+    if markdown_output is not None:
+        authorize_additional_corpus_path(resolved_authorization, markdown_output)
+    if json_output is not None:
+        authorize_additional_corpus_path(resolved_authorization, json_output)
     if seed:
         seed_gold(root)
     scorecard = evaluate_current_corpus(root)
@@ -842,6 +875,8 @@ def main() -> int:
         seed=args.seed,
         markdown_output=args.markdown_output,
         json_output=args.json_output,
+        project_root=args.project_root,
+        corpus_store_root=args.corpus_store_root,
     )
 
     if args.json:

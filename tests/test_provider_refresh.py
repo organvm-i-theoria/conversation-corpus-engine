@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from conversation_corpus_engine.corpus_store import register_corpus_store
 from conversation_corpus_engine.federation import list_registered_corpora, upsert_corpus
 from conversation_corpus_engine.provider_refresh import refresh_provider_corpus
 from conversation_corpus_engine.source_policy import load_source_policy, set_source_policy
@@ -58,6 +59,9 @@ class ProviderRefreshTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace_root = Path(tmpdir)
             project_root = workspace_root / "project"
+            project_root.mkdir()
+            corpus_store_root = workspace_root / "corpus-store"
+            corpus_store_root.mkdir()
             source_drop_root = workspace_root / "source-drop"
             inbox = source_drop_root / "perplexity" / "inbox"
             inbox.mkdir(parents=True, exist_ok=True)
@@ -75,6 +79,7 @@ class ProviderRefreshTests(unittest.TestCase):
                 name="Perplexity History Memory",
                 make_default=True,
             )
+            register_corpus_store(project_root, corpus_store_root)
             set_source_policy(
                 project_root,
                 "perplexity",
@@ -88,6 +93,7 @@ class ProviderRefreshTests(unittest.TestCase):
                 project_root=project_root,
                 provider="perplexity",
                 source_drop_root=source_drop_root,
+                corpus_store_root=corpus_store_root,
                 note="Stage a refreshed Perplexity corpus.",
             )
 
@@ -96,6 +102,11 @@ class ProviderRefreshTests(unittest.TestCase):
 
             self.assertEqual(payload["candidate"]["status"], "staged")
             self.assertTrue(Path(payload["candidate_root"]).exists())
+            self.assertTrue(
+                Path(payload["candidate_root"])
+                .resolve()
+                .is_relative_to((corpus_store_root / "provider-refresh" / "perplexity").resolve())
+            )
             self.assertTrue(payload["evaluation"]["ran"])
             self.assertTrue(Path(payload["evaluation"]["outputs"]["scorecard_md"]).exists())
             self.assertEqual(str(Path(registry[0]["root"]).resolve()), str(live_root.resolve()))
@@ -106,6 +117,9 @@ class ProviderRefreshTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace_root = Path(tmpdir)
             project_root = workspace_root / "project"
+            project_root.mkdir()
+            corpus_store_root = workspace_root / "corpus-store"
+            corpus_store_root.mkdir()
             source_drop_root = workspace_root / "source-drop"
             inbox = source_drop_root / "perplexity" / "inbox"
             inbox.mkdir(parents=True, exist_ok=True)
@@ -123,6 +137,7 @@ class ProviderRefreshTests(unittest.TestCase):
                 name="Perplexity History Memory",
                 make_default=True,
             )
+            register_corpus_store(project_root, corpus_store_root)
             set_source_policy(
                 project_root,
                 "perplexity",
@@ -136,6 +151,7 @@ class ProviderRefreshTests(unittest.TestCase):
                 project_root=project_root,
                 provider="perplexity",
                 source_drop_root=source_drop_root,
+                corpus_store_root=corpus_store_root,
                 promote=True,
                 note="Promote the refreshed Perplexity corpus.",
             )

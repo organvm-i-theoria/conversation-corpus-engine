@@ -63,6 +63,81 @@ def test_main_federation_build_prints_json_payload(
     assert payload == {"project_root": str(tmp_path), "built": True}
 
 
+def test_main_corpus_store_register_forwards_root_and_project(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    calls: dict[str, Path] = {}
+
+    def fake_register(project_root: Path, root: Path) -> dict[str, str]:
+        calls["project_root"] = project_root
+        calls["root"] = root
+        return {"root": str(root), "status": "active", "registered_at": "now"}
+
+    monkeypatch.setattr(MODULE, "register_corpus_store", fake_register)
+
+    _run_main(
+        monkeypatch,
+        [
+            "corpus-store",
+            "register",
+            "--project-root",
+            str(tmp_path / "project"),
+            "--root",
+            str(tmp_path / "store"),
+        ],
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert calls == {
+        "project_root": tmp_path / "project",
+        "root": tmp_path / "store",
+    }
+    assert payload["status"] == "active"
+
+
+def test_main_provider_write_commands_forward_corpus_store_root(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    project_root = tmp_path / "project"
+    corpus_store_root = tmp_path / "store"
+    calls: dict[str, dict[str, object]] = {}
+
+    def fake_import(**kwargs: object) -> dict[str, object]:
+        calls["import"] = kwargs
+        return {"provider": kwargs["provider"]}
+
+    def fake_bootstrap(**kwargs: object) -> dict[str, object]:
+        calls["bootstrap"] = kwargs
+        return {"provider": kwargs["provider"]}
+
+    def fake_refresh(**kwargs: object) -> dict[str, object]:
+        calls["refresh"] = kwargs
+        return {"provider": kwargs["provider"]}
+
+    monkeypatch.setattr(MODULE, "import_provider_corpus", fake_import)
+    monkeypatch.setattr(MODULE, "bootstrap_provider_evaluation", fake_bootstrap)
+    monkeypatch.setattr(MODULE, "refresh_provider_corpus", fake_refresh)
+
+    common = [
+        "--provider",
+        "perplexity",
+        "--project-root",
+        str(project_root),
+        "--corpus-store-root",
+        str(corpus_store_root),
+    ]
+    _run_main(monkeypatch, ["provider", "import", *common])
+    capsys.readouterr()
+    _run_main(monkeypatch, ["provider", "bootstrap-eval", *common])
+    capsys.readouterr()
+    _run_main(monkeypatch, ["provider", "refresh", *common])
+    capsys.readouterr()
+
+    for kwargs in calls.values():
+        assert kwargs["project_root"] == project_root
+        assert kwargs["corpus_store_root"] == corpus_store_root
+
+
 def test_main_provider_readiness_json_mode_writes_reports(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
@@ -231,10 +306,14 @@ def test_main_evaluation_run_json_mode_prints_scorecard_and_outputs(
         seed: bool,
         markdown_output: Path | None,
         json_output: Path | None,
+        project_root: Path,
+        corpus_store_root: Path | None,
     ) -> tuple[dict[str, object], dict[str, Path]]:
         assert seed is True
         assert markdown_output == root / "answer.md"
         assert json_output == root / "answer.json"
+        assert project_root == tmp_path / "project"
+        assert corpus_store_root == tmp_path / "store"
         return (
             {"overall_state": "pass"},
             {
@@ -252,6 +331,10 @@ def test_main_evaluation_run_json_mode_prints_scorecard_and_outputs(
             "run",
             "--root",
             str(root),
+            "--project-root",
+            str(tmp_path / "project"),
+            "--corpus-store-root",
+            str(tmp_path / "store"),
             "--seed",
             "--markdown-output",
             str(root / "answer.md"),

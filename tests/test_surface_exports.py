@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from conversation_corpus_engine.corpus_candidates import stage_corpus_candidate
+from conversation_corpus_engine.corpus_store import register_corpus_store
 from conversation_corpus_engine.federation import build_federation, upsert_corpus
 from conversation_corpus_engine.governance_candidates import stage_policy_candidate
 from conversation_corpus_engine.governance_replay import (
@@ -111,6 +113,9 @@ class SurfaceExportsTests(unittest.TestCase):
             project_root = workspace_root / "project"
             source_drop_root = workspace_root / "source-drop"
             seed_surface_project(project_root, source_drop_root)
+            corpus_store_root = workspace_root / "private-corpus-store"
+            corpus_store_root.mkdir()
+            register_corpus_store(project_root, corpus_store_root)
 
             manifest = build_surface_manifest(
                 project_root,
@@ -169,6 +174,8 @@ class SurfaceExportsTests(unittest.TestCase):
             )
             self.assertEqual(context["summary"]["active_corpus_count"], 1)
             self.assertEqual(context["summary"]["provider_count"], 8)
+            self.assertNotIn(str(corpus_store_root.resolve()), json.dumps(manifest))
+            self.assertNotIn(str(corpus_store_root.resolve()), json.dumps(context))
             self.assertTrue(bundle["summary"]["valid"])
             self.assertTrue(manifest_result["valid"], manifest_result["errors"])
             self.assertTrue(context_result["valid"], context_result["errors"])

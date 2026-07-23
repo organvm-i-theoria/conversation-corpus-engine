@@ -25,7 +25,7 @@ from .source_lifecycle import compute_source_freshness
 
 DEFAULT_PROJECT_ROOT = default_project_root()
 FEDERATION_CONTRACT = "conversation-corpus-engine-v1"
-REGISTRY_VERSION = 1
+REGISTRY_VERSION = 2
 REQUIRED_CONTRACT_FILES = (
     "corpus/threads-index.json",
     "corpus/semantic-v3-index.json",
@@ -111,6 +111,7 @@ def load_registry(project_root: Path) -> dict[str, Any]:
 
 
 def save_registry(project_root: Path, registry: dict[str, Any]) -> dict[str, Any]:
+    registry["registry_version"] = REGISTRY_VERSION
     registry["generated_at"] = now_iso()
     active = [
         entry for entry in registry.get("corpora", []) if entry.get("status", "active") == "active"

@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from conversation_corpus_engine.corpus_store import CorpusStoreError, register_corpus_store
 from conversation_corpus_engine.evaluation_bootstrap import (
     bootstrap_claude_evaluation,
     bootstrap_provider_evaluation,
@@ -117,19 +118,23 @@ class EvaluationBootstrapTests(unittest.TestCase):
     def test_bootstrap_explicit_target_writes_provider_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"
-            target_root = Path(tmpdir) / "gemini-history-memory"
             project_root.mkdir(parents=True, exist_ok=True)
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            target_root = corpus_store_root / "gemini-history-memory"
             seed_eval_target(
                 target_root,
                 corpus_id="gemini-history-memory",
                 name="Gemini History Memory",
                 adapter_type="gemini-export",
             )
+            register_corpus_store(project_root, corpus_store_root)
 
             payload = bootstrap_provider_evaluation(
                 project_root=project_root,
                 provider="gemini",
                 target_root=target_root,
+                corpus_store_root=corpus_store_root,
             )
 
             self.assertEqual(payload["provider"], "gemini")
@@ -140,11 +145,40 @@ class EvaluationBootstrapTests(unittest.TestCase):
                 (project_root / "reports" / "gemini-evaluation-bootstrap-latest.md").exists()
             )
 
+    def test_bootstrap_denial_does_not_seed_or_write_project_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir) / "project"
+            project_root.mkdir()
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            register_corpus_store(project_root, corpus_store_root)
+            outside_target = Path(tmpdir) / "outside-corpus"
+            seed_eval_target(
+                outside_target,
+                corpus_id="gemini-history-memory",
+                name="Gemini History Memory",
+                adapter_type="gemini-export",
+            )
+
+            with self.assertRaises(CorpusStoreError):
+                bootstrap_provider_evaluation(
+                    project_root=project_root,
+                    provider="gemini",
+                    target_root=outside_target,
+                    corpus_store_root=corpus_store_root,
+                )
+
+            self.assertFalse((outside_target / "eval" / "gold").exists())
+            self.assertFalse((outside_target / "eval" / "manual-review-guide.md").exists())
+            self.assertFalse((project_root / "reports").exists())
+
     def test_bootstrap_claude_uses_policy_primary_root_and_can_run_full_eval(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "project"
-            target_root = Path(tmpdir) / "claude-local-session-memory"
             project_root.mkdir(parents=True, exist_ok=True)
+            corpus_store_root = Path(tmpdir) / "corpus-store"
+            corpus_store_root.mkdir()
+            target_root = corpus_store_root / "claude-local-session-memory"
             seed_eval_target(
                 target_root,
                 corpus_id="claude-local-session-memory",
@@ -162,11 +196,13 @@ class EvaluationBootstrapTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            register_corpus_store(project_root, corpus_store_root)
 
             payload = bootstrap_claude_evaluation(
                 project_root=project_root,
                 policy_path=policy_path,
                 full_eval=True,
+                corpus_store_root=corpus_store_root,
             )
 
             self.assertEqual(payload["target_root"], str(target_root.resolve()))
