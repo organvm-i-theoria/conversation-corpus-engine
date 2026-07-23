@@ -139,16 +139,17 @@ class PerplexityLocalSessionResolutionTests(unittest.TestCase):
             self.assertEqual(resolved, jar.resolve())
 
     def test_default_output_root_uses_default_corpus_id(self) -> None:
+        # Post corpus-store-custody refactor (#64), default_output_root takes an
+        # already-resolved (store_root, corpus_id); corpus_id resolution moved up
+        # into import_provider_corpus, which uses the catalog default_corpus_id for
+        # perplexity local-session. Assert the invariant at both its new homes.
+        from conversation_corpus_engine.provider_catalog import get_provider_config
+
+        corpus_id = get_provider_config("perplexity")["default_corpus_id"]
+        self.assertEqual(corpus_id, "perplexity-history-memory")
         with tempfile.TemporaryDirectory() as tmpdir:
-            source_drop_root = Path(tmpdir) / "drop"
-            source_drop_root.mkdir()
-            root = default_output_root(
-                provider="perplexity",
-                mode="local-session",
-                project_root=Path(tmpdir) / "project",
-                source_drop_root=source_drop_root,
-            )
-            # local-session uses default_corpus_id, not a fallback.
+            store_root = Path(tmpdir) / "store"
+            root = default_output_root(corpus_store_root=store_root, corpus_id=corpus_id)
             self.assertTrue(str(root).endswith("perplexity-history-memory"))
 
 
