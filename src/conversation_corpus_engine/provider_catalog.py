@@ -71,8 +71,11 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "inbox_rel": "perplexity/inbox",
         "default_corpus_id": "perplexity-history-memory",
         "default_corpus_name": "Perplexity History Memory",
-        "local_source_root": "/Users/4jp/Library/Containers/ai.perplexity.mac",
-        "local_session_supported": False,
+        "local_source_root": "/Users/4jp/Library/HTTPStorages",
+        "local_session_supported": True,
+        "local_session_cookie_jar": (
+            "/Users/4jp/Library/HTTPStorages/ai.perplexity.macv3.binarycookies"
+        ),
         "calibration_only": True,
     },
     "copilot": {
